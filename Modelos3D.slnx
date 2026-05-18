@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Modelos3D.vcxproj" Id="1f282934-d289-40a2-ba1b-042e969268e3" />
+</Solution>
