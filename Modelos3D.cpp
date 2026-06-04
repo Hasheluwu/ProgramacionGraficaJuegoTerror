@@ -6,17 +6,16 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <iostream>
+#include <vector>
+#include <string>
 
 #include "Shader.h"
 #include "Model.h"
 #include "Camera.h"
-
-// ---------------- WINDOW ----------------
+#include "Skybox.h"
 
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
-
-// ---------------- CAMERA ----------------
 
 Camera camera(glm::vec3(0.0f, 2.0f, 8.0f));
 
@@ -26,8 +25,6 @@ bool firstMouse = true;
 
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
-
-// ---------------- CALLBACKS ----------------
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -78,8 +75,6 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
-// ---------------- MAIN ----------------
-
 int main()
 {
     glfwInit();
@@ -88,7 +83,14 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Modelo 3D + Luz", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(
+        SCR_WIDTH,
+        SCR_HEIGHT,
+        "Casa Terror 3D",
+        NULL,
+        NULL
+    );
+
     if (!window)
     {
         std::cout << "ERROR WINDOW" << std::endl;
@@ -112,21 +114,47 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
 
-    // ---------------- SHADER ----------------
+    Shader shader(
+        "shaders/vertex.glsl",
+        "shaders/fragment.glsl"
+    );
 
-    Shader shader("shaders/vertex.glsl", "shaders/fragment.glsl");
+    Shader skyboxShader(
+        "shaders/skybox.vert",
+        "shaders/skybox.frag"
+    );
 
-    // ---------------- MODEL ----------------
+    // ================= MODELOS =================
+    // Cambiá estos nombres si tus archivos se llaman diferente.
 
-    Model model("C:/Users/m1xim/source/repos/Modelos3D/Resources/Models/Sahur/car.obj");
+    Model sotanoCorregidoModel(
+        "Resources/Models/Casa/sotanoCorregido.obj"
+    );
+
+    Model puertaModel(
+        "Resources/Models/Casa/puerta.obj"
+    );
+
+    // ================= SKYBOX =================
+
+    std::vector<std::string> faces
+    {
+        "Resources/Skybox/posx.jpg",
+        "Resources/Skybox/negx.jpg",
+        "Resources/Skybox/posy.jpg",
+        "Resources/Skybox/negy.jpg",
+        "Resources/Skybox/posz.jpg",
+        "Resources/Skybox/negz.jpg"
+    };
+
+    Skybox skybox(faces);
 
     float angle = 0.0f;
-
-    // ---------------- LOOP ----------------
 
     while (!glfwWindowShouldClose(window))
     {
         float currentFrame = (float)glfwGetTime();
+
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
@@ -135,20 +163,22 @@ int main()
         glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // ---------------- LUZ ORBITAL ----------------
+        // ================= LUZ PUNTUAL =================
+
         angle += deltaTime;
 
         glm::vec3 lightPos;
         lightPos.x = sin(angle) * 5.0f;
-        lightPos.y = 2.0f;
+        lightPos.y = 4.0f;
         lightPos.z = cos(angle) * 5.0f;
 
-        // ---------------- SHADER ----------------
         shader.use();
 
         glUniform3f(
             glGetUniformLocation(shader.ID, "lightPos"),
-            lightPos.x, lightPos.y, lightPos.z
+            lightPos.x,
+            lightPos.y,
+            lightPos.z
         );
 
         glUniform3f(
@@ -158,12 +188,6 @@ int main()
             camera.Position.z
         );
 
-        // ---------------- MATRICES ----------------
-
-        glm::mat4 modelMat = glm::mat4(1.0f);
-        modelMat = glm::translate(modelMat, glm::vec3(0.0f, -1.0f, 0.0f));
-        modelMat = glm::scale(modelMat, glm::vec3(1.0f));
-
         glm::mat4 view = camera.GetViewMatrix();
 
         glm::mat4 projection = glm::perspective(
@@ -171,13 +195,6 @@ int main()
             (float)SCR_WIDTH / (float)SCR_HEIGHT,
             0.1f,
             1000.0f
-        );
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.ID, "model"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(modelMat)
         );
 
         glUniformMatrix4fv(
@@ -194,13 +211,84 @@ int main()
             glm::value_ptr(projection)
         );
 
-        // ---------------- DRAW ----------------
-        model.Draw(shader.ID);
+        // ================= CASA =================
+
+        glm::mat4 sotanoCorregidoMat = glm::mat4(1.0f);
+
+        sotanoCorregidoMat = glm::translate(
+            sotanoCorregidoMat,
+            glm::vec3(0.0f, 0.0f, 0.0f)
+        );
+
+        sotanoCorregidoMat = glm::scale(
+            sotanoCorregidoMat,
+            glm::vec3(1.0f)
+        );
+
+        glUniformMatrix4fv(
+            glGetUniformLocation(shader.ID, "model"),
+            1,
+            GL_FALSE,
+            glm::value_ptr(sotanoCorregidoMat)
+        );
+
+        sotanoCorregidoModel.Draw(shader.ID);
+
+        // ================= PUERTAS =================
+
+        glm::mat4 puertaMat = glm::mat4(1.0f);
+
+        puertaMat = glm::translate(
+            puertaMat,
+            glm::vec3(0.0f, 0.0f, 0.0f)
+        );
+
+        puertaMat = glm::scale(
+            puertaMat,
+            glm::vec3(1.0f)
+        );
+
+        glUniformMatrix4fv(
+            glGetUniformLocation(shader.ID, "model"),
+            1,
+            GL_FALSE,
+            glm::value_ptr(puertaMat)
+        );
+
+        puertaModel.Draw(shader.ID);
+
+        // ================= SKYBOX =================
+
+        glDepthFunc(GL_LEQUAL);
+
+        skyboxShader.use();
+
+        glm::mat4 skyboxView =
+            glm::mat4(glm::mat3(camera.GetViewMatrix()));
+
+        glUniformMatrix4fv(
+            glGetUniformLocation(skyboxShader.ID, "view"),
+            1,
+            GL_FALSE,
+            glm::value_ptr(skyboxView)
+        );
+
+        glUniformMatrix4fv(
+            glGetUniformLocation(skyboxShader.ID, "projection"),
+            1,
+            GL_FALSE,
+            glm::value_ptr(projection)
+        );
+
+        skybox.Draw(skyboxShader.ID);
+
+        glDepthFunc(GL_LESS);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     glfwTerminate();
+
     return 0;
 }

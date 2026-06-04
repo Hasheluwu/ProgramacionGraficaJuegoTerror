@@ -149,6 +149,7 @@
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="Modelos3D.cpp" />
     <ClCompile Include="Shader.cpp" />
+    <ClCompile Include="Skybox.cpp" />
     <ClCompile Include="TextureUtils.cpp" />
     <ClCompile Include="vendor\glad\src\glad.c" />
   </ItemGroup>
@@ -158,6 +159,7 @@
     <ClInclude Include="Model.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Shader.h" />
+    <ClInclude Include="Skybox.h" />
     <ClInclude Include="TextureUtils.h" />
   </ItemGroup>
   <ItemGroup>
@@ -165,7 +167,11 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="shaders\fragment.glsl" />
+    <Text Include="shaders\skybox.vert" />
     <Text Include="shaders\vertex.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\skybox.frag" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

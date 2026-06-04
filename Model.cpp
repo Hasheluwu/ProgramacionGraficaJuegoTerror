@@ -19,10 +19,11 @@ void Model::loadModel(string const& path)
 {
     Assimp::Importer importer;
 
+    directory = path.substr(0, path.find_last_of("/\\"));
+
     const aiScene* scene = importer.ReadFile(
         path,
         aiProcess_Triangulate |
-        aiProcess_FlipUVs |
         aiProcess_GenNormals
     );
 
@@ -32,7 +33,6 @@ void Model::loadModel(string const& path)
         return;
     }
 
-    directory = path.substr(0, path.find_last_of("/\\"));
     processNode(scene->mRootNode, scene);
 }
 
@@ -56,7 +56,6 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
     vector<unsigned int> indices;
     vector<Texture> textures;
 
-    // ---------------- VERTICES ----------------
     for (unsigned int i = 0; i < mesh->mNumVertices; i++)
     {
         Vertex v;
@@ -67,28 +66,34 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
             mesh->mVertices[i].z
         );
 
-        v.Normal = glm::vec3(
-            mesh->mNormals[i].x,
-            mesh->mNormals[i].y,
-            mesh->mNormals[i].z
-        );
+        if (mesh->HasNormals())
+        {
+            v.Normal = glm::vec3(
+                mesh->mNormals[i].x,
+                mesh->mNormals[i].y,
+                mesh->mNormals[i].z
+            );
+        }
+        else
+        {
+            v.Normal = glm::vec3(0.0f, 1.0f, 0.0f);
+        }
 
         if (mesh->mTextureCoords[0])
         {
             v.TexCoords = glm::vec2(
                 mesh->mTextureCoords[0][i].x,
-                1.0f - mesh->mTextureCoords[0][i].y
+                mesh->mTextureCoords[0][i].y
             );
         }
         else
         {
-            v.TexCoords = glm::vec2(0.0f);
+            v.TexCoords = glm::vec2(0.0f, 0.0f);
         }
 
         vertices.push_back(v);
     }
 
-    // ---------------- INDICES ----------------
     for (unsigned int i = 0; i < mesh->mNumFaces; i++)
     {
         aiFace face = mesh->mFaces[i];
@@ -97,7 +102,6 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
             indices.push_back(face.mIndices[j]);
     }
 
-    // ---------------- TEXTURES ----------------
     if (mesh->mMaterialIndex >= 0)
     {
         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];

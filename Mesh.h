@@ -1,9 +1,11 @@
-#pragma once
+#ifndef MESH_H
+#define MESH_H
 
-#include <vector>
-#include <string>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+
+#include <string>
+#include <vector>
 
 using namespace std;
 
@@ -17,8 +19,8 @@ struct Vertex
 struct Texture
 {
     unsigned int id;
-    std::string type;
-    std::string path;
+    string type;
+    string path;
 };
 
 class Mesh
@@ -28,14 +30,21 @@ public:
     vector<unsigned int> indices;
     vector<Texture> textures;
 
-    Mesh(vector<Vertex> vertices,
+    unsigned int VAO;
+
+    Mesh(
+        vector<Vertex> vertices,
         vector<unsigned int> indices,
-        vector<Texture> textures);
+        vector<Texture> textures
+    );
 
     void Draw(unsigned int shaderProgram);
 
 private:
-    unsigned int VAO, VBO, EBO;
+    unsigned int VBO;
+    unsigned int EBO;
 
     void setupMesh();
 };
+
+#endif

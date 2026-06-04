@@ -80,11 +80,13 @@ public:
     {
         float velocity = MovementSpeed * deltaTime;
 
+        glm::vec3 frontFlat = glm::normalize(glm::vec3(Front.x, 0.0f, Front.z));
+
         if (direction == FORWARD)
-            Position += Front * velocity;
+            Position += frontFlat * velocity;
 
         if (direction == BACKWARD)
-            Position -= Front * velocity;
+            Position -= frontFlat * velocity;
 
         if (direction == LEFT)
             Position -= Right * velocity;
