@@ -11,6 +11,9 @@ uniform sampler2D texture_diffuse1;
 uniform vec3 lightPos;
 uniform vec3 viewPos;
 
+// ¡NUEVA VARIABLE PARA EL TINTE DE COLOR!
+uniform vec3 colorTint; 
+
 void main()
 {
     vec3 texColor = texture(texture_diffuse1, TexCoords).rgb;
@@ -31,5 +34,6 @@ void main()
 
     vec3 result = ambient + diff * texColor + specular;
 
-    FragColor = vec4(result, 1.0);
+    // Multiplicamos el resultado final por nuestro colorTint
+    FragColor = vec4(result * colorTint, 1.0);
 }

@@ -14,7 +14,9 @@ enum Camera_Movement
     FORWARD,
     BACKWARD,
     LEFT,
-    RIGHT
+    RIGHT,
+    UPWARD,   // <-- NUEVO
+    DOWNWARD  // <-- NUEVO
 };
 
 // --------------------------------------------------
@@ -82,15 +84,18 @@ public:
 
         if (direction == FORWARD)
             Position += Front * velocity;
-
         if (direction == BACKWARD)
             Position -= Front * velocity;
-
         if (direction == LEFT)
             Position -= Right * velocity;
-
         if (direction == RIGHT)
             Position += Right * velocity;
+
+        // --- NUEVO MOVIMIENTO VERTICAL ---
+        if (direction == UPWARD)
+            Position += WorldUp * velocity;
+        if (direction == DOWNWARD)
+            Position -= WorldUp * velocity;
     }
 
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true)

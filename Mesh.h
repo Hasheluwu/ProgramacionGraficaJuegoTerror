@@ -16,7 +16,7 @@ struct Vertex
 
 struct Texture
 {
-    unsigned int id;
+    unsigned int id = 0;
     std::string type;
     std::string path;
 };
