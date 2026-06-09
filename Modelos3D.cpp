@@ -1,49 +1,45 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <filesystem>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <SOIL2/SOIL2.h> 
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <string>
 #include <cmath>
-#include <random>
+
 #include "Shader.h"
 #include "Model.h"
 #include "Camera.h"
-#include "IA/Pathfinding.h" 
 
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
-float ALTURA_JUGADOR = 2.0f;
-float ALTURA_ESFERA = 1.0f;
-
 // ==========================================
-// CONFIGURACIÓN DE PUNTO CERO Y ALTURA
+// CONFIGURACIÓN DE LA MATRIZ Y EL MAPA NUEVO
 // ==========================================
-const float OFFSET_X = -68.38f;
-const float OFFSET_Z = -1.67f;
-
-float NIVEL_DEL_SUELO = 3.8f;
-
-// ==========================================
-// ¡AQUÍ PONDRÁS LAS COORDENADAS EXACTAS DE TU SPAWN!
-// ==========================================
-float SPAWN_X = -65.0f;
-float SPAWN_Y = NIVEL_DEL_SUELO + 2.0f;
-float SPAWN_Z = -10.0f; // Punto seguro para no caer fuera de la matriz
-
+const float OFFSET_X = -76.40f;
+const float OFFSET_Z = -24.00f;
 const float TAMANO_BLOQUE = 0.8f;
 const float CENTRO_BLOQUE = TAMANO_BLOQUE / 2.0f;
+float NIVEL_DEL_SUELO = 2.27f;
 
-Camera camera(glm::vec3(0.0f, ALTURA_JUGADOR, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, 0.0f);
+// ==========================================
+// SPAWN DINÁMICO (Al no haber waypoints)
+// ==========================================
+// Te colocamos 5 metros adentro de la esquina superior izquierda de la matriz
+float SPAWN_X = OFFSET_X + 5.0f;
+float SPAWN_Y = NIVEL_DEL_SUELO; // Tu altura base
+float SPAWN_Z = -(OFFSET_Z + 5.0f); // Respetando el efecto espejo de Blender a OpenGL
 
-float lastX = SCR_WIDTH / 2.0f, lastY = SCR_HEIGHT / 2.0f;
+Camera camera(glm::vec3(SPAWN_X, SPAWN_Y, SPAWN_Z), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, 0.0f);
+
+float lastX = SCR_WIDTH / 2.0f;
+float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
-float deltaTime = 0.0f, lastFrame = 0.0f;
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
 float debugTimer = 0.0f;
 
 std::vector<std::vector<int>> laberinto;
@@ -67,15 +63,15 @@ std::vector<std::vector<int>> cargarLaberinto(const std::string& ruta) {
     return matriz;
 }
 
-std::vector<glm::ivec2> waypoints;
-
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) { glViewport(0, 0, width, height); }
+
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     float xpos = (float)xposIn; float ypos = (float)yposIn;
     if (firstMouse) { lastX = xpos; lastY = ypos; firstMouse = false; }
     camera.ProcessMouseMovement(xpos - lastX, lastY - ypos);
     lastX = xpos; lastY = ypos;
 }
+
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) { camera.ProcessMouseScroll((float)yoffset); }
 
 void processInput(GLFWwindow* window) {
@@ -90,10 +86,8 @@ void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) camera.ProcessKeyboard(UPWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) camera.ProcessKeyboard(DOWNWARD, deltaTime);
 
-    // SISTEMA DE COLISIONES INVERTIDO
-    if (camera.Position.y < (NIVEL_DEL_SUELO + 3.0f) && laberinto.size() > 0) {
+    if (camera.Position.y < (NIVEL_DEL_SUELO + 3.0f) && !laberinto.empty()) {
         float margen = 0.15f;
-
         float blenderZ_cam = -camera.Position.z;
 
         int fMin = (int)floor(((blenderZ_cam - margen) - OFFSET_Z) / TAMANO_BLOQUE);
@@ -101,13 +95,11 @@ void processInput(GLFWwindow* window) {
         int cIzq = (int)floor(((camera.Position.x - margen) - OFFSET_X) / TAMANO_BLOQUE);
         int cDer = (int)floor(((camera.Position.x + margen) - OFFSET_X) / TAMANO_BLOQUE);
 
-        // Si chocamos contra una pared o nos salimos del mapa...
-        if (fMin < 0 || fMax >= laberinto.size() || cIzq < 0 || cDer >= laberinto[0].size() ||
+        // APLICADO EL BLINDAJE (int) A LOS .size()
+        if (fMin < 0 || fMax >= (int)laberinto.size() || cIzq < 0 || cDer >= (int)laberinto[0].size() ||
             laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 ||
             laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1) {
 
-            // ¡EL ARREGLO! Solo bloqueamos los ejes X y Z. 
-            // Si te trabas, presiona la flecha Arriba para escapar.
             camera.Position.x = oldPos.x;
             camera.Position.z = oldPos.z;
         }
@@ -120,7 +112,8 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Motor Grafico - Debugger de Spawn", NULL, NULL);
+
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Auditor de Colisiones - Solo Camara", NULL, NULL);
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
@@ -131,51 +124,22 @@ int main()
 
     Shader shader("shaders/vertex.glsl", "shaders/fragment.glsl");
 
-    std::cout << "[INFO] Leyendo matriz_definit.txt..." << std::endl;
-    laberinto = cargarLaberinto("Resources/matriz_elmejor.txt");
+    std::cout << "[INFO] Leyendo matriz.txt..." << std::endl;
+    // Corregido el "uwu" por si acaso ese era el archivo real
+    laberinto = cargarLaberinto("Resources/matriz_sotanocorregidoend.txt");
     if (laberinto.empty()) return -1;
 
-    for (int y = 0; y < (int)laberinto.size(); y++) {
-        for (int x = 0; x < (int)laberinto[0].size(); x++) {
-            if (laberinto[y][x] == 2) waypoints.push_back(glm::ivec2(x, y));
-        }
-    }
-    if (waypoints.empty()) waypoints.push_back(glm::ivec2(laberinto[0].size() / 2, laberinto.size() / 2));
+    // ==========================================
+    // DEBUGGING DE MODELOS Y TEXTURAS
+    // ==========================================
+    std::cout << "[DEBUG] Intentando cargar el modelo 3D del sotano..." << std::endl;
+    Model sotanoModel("Resources/sotano.obj");
+    std::cout << "[DEBUG] EXITO: Modelo del sotano cargado correctamente en memoria." << std::endl;
 
-    Model sotanoModel("Resources/sotanoTexturas.obj");
+    std::cout << "[DEBUG] Intentando cargar el modelo de la esfera..." << std::endl;
     Model esferaModel("Resources/sphere/scene.gltf");
-
-    glm::vec3 posActualIA = glm::vec3(
-        OFFSET_X + (waypoints[0].x * TAMANO_BLOQUE) + CENTRO_BLOQUE,
-        NIVEL_DEL_SUELO + ALTURA_ESFERA,
-        -(OFFSET_Z + (waypoints[0].y * TAMANO_BLOQUE) + CENTRO_BLOQUE)
-    );
-
-    Pathfinding IA_Cerebro;
-    IA_Cerebro.temperatura = 1.2f;
-    float velocidadIA = 4.0f;
-
-    std::vector<glm::ivec2> rutaActual;
-    int indiceRuta = 0;
-
-    auto AsignarNuevaMision = [&]() {
-        glm::ivec2 posMatrizIA(
-            (int)floor((posActualIA.x - OFFSET_X) / TAMANO_BLOQUE),
-            (int)floor((-posActualIA.z - OFFSET_Z) / TAMANO_BLOQUE)
-        );
-        glm::ivec2 nuevoDestino;
-        do { nuevoDestino = waypoints[rand() % waypoints.size()]; } while (nuevoDestino == posMatrizIA && waypoints.size() > 1);
-
-        rutaActual = IA_Cerebro.EncontrarCamino(posMatrizIA, nuevoDestino, laberinto);
-        indiceRuta = 1;
-        };
-
-    AsignarNuevaMision();
-
+    std::cout << "[DEBUG] EXITO: Modelo de la esfera cargado correctamente en memoria." << std::endl;
     // ==========================================
-    // ¡AQUÍ ESTÁS NACIENDO TÚ!
-    // ==========================================
-    camera.Position = glm::vec3(SPAWN_X, SPAWN_Y, SPAWN_Z);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -190,49 +154,16 @@ int main()
             int cX = (int)floor((camera.Position.x - OFFSET_X) / TAMANO_BLOQUE);
             int cZ = (int)floor((-camera.Position.z - OFFSET_Z) / TAMANO_BLOQUE);
 
-            std::cout << "\n--- ESTADO DEL JUGADOR (USA ESTO PARA TU SPAWN) ---" << std::endl;
-            std::cout << "Mundo 3D -> X: " << camera.Position.x << " | Y (Altura): " << camera.Position.y << " | Z: " << camera.Position.z << std::endl;
-            std::cout << "Matriz 2D-> Columna(X): " << cX << " | Fila(Z): " << cZ << std::endl;
-
-            if (cZ >= 0 && cZ < laberinto.size() && cX >= 0 && cX < laberinto[0].size()) {
-                int valorMatriz = laberinto[cZ][cX];
-                std::cout << "Casilla actual: [" << valorMatriz << "] ";
-                if (valorMatriz == 1) std::cout << "(ZONA DE COLISION)" << std::endl;
-                else std::cout << "(Espacio Libre Caminable)" << std::endl;
+            std::cout << "\n--- ESTADO DEL JUGADOR ---" << std::endl;
+            std::cout << "Mundo 3D -> X: " << camera.Position.x << " | Z: " << camera.Position.z << std::endl;
+            if (cZ >= 0 && cZ < (int)laberinto.size() && cX >= 0 && cX < (int)laberinto[0].size()) {
+                std::cout << "Casilla actual: [" << laberinto[cZ][cX] << "]" << std::endl;
             }
-            else {
-                std::cout << "FUERA DE LOS LIMITES DEL MAPA!" << std::endl;
-            }
-            std::cout << "--------------------------\n" << std::endl;
             debugTimer = 0.0f;
         }
 
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        if (indiceRuta < rutaActual.size()) {
-            glm::vec3 nodoObjetivo3D(
-                OFFSET_X + (rutaActual[indiceRuta].x * TAMANO_BLOQUE) + CENTRO_BLOQUE,
-                NIVEL_DEL_SUELO + ALTURA_ESFERA,
-                -(OFFSET_Z + (rutaActual[indiceRuta].y * TAMANO_BLOQUE) + CENTRO_BLOQUE)
-            );
-
-            glm::vec3 direccion = nodoObjetivo3D - posActualIA;
-            float distanciaAlNodo = glm::length(direccion);
-            float pasoDeMovimiento = velocidadIA * deltaTime;
-
-            if (distanciaAlNodo > pasoDeMovimiento) {
-                direccion = glm::normalize(direccion);
-                posActualIA += direccion * pasoDeMovimiento;
-            }
-            else {
-                posActualIA = nodoObjetivo3D;
-                indiceRuta++;
-            }
-        }
-        else {
-            AsignarNuevaMision();
-        }
 
         shader.use();
         glUniform3f(glGetUniformLocation(shader.ID, "lightPos"), 50.0f, 50.0f, 50.0f);
@@ -246,35 +177,30 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(sotanoMat));
         sotanoModel.Draw(shader.ID);
 
-        glm::mat4 monsterMat = glm::mat4(1.0f);
-        monsterMat = glm::translate(monsterMat, posActualIA);
-        monsterMat = glm::scale(monsterMat, glm::vec3(0.1f));
-        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(monsterMat));
-        esferaModel.Draw(shader.ID);
-
-        // --- DEBUGGER VISUAL (SOLO COLISIONES) ---
+        // --- DEBUGGER VISUAL DE COLISIONES (Bolas Verdes a la altura del pecho) ---
         for (int f = 0; f < laberinto.size(); f++) {
             for (int c = 0; c < laberinto[0].size(); c++) {
 
                 float posX = OFFSET_X + (c * TAMANO_BLOQUE) + CENTRO_BLOQUE;
-                float blenderY = OFFSET_Z + (f * TAMANO_BLOQUE) + CENTRO_BLOQUE;
-                float posZ = -blenderY;
+                float posZ = -(OFFSET_Z + (f * TAMANO_BLOQUE) + CENTRO_BLOQUE);
 
                 float distanciaAlJugador = sqrt(pow(camera.Position.x - posX, 2) + pow(camera.Position.z - posZ, 2));
 
                 if (distanciaAlJugador < 12.0f) {
-
                     if (laberinto[f][c] == 1) {
-                        // PARED (Bolas Verdes) - A la altura del pecho (1.3f) y gigantes (0.08f)
                         glm::mat4 debugMat = glm::mat4(1.0f);
-                        debugMat = glm::translate(debugMat, glm::vec3(posX, NIVEL_DEL_SUELO + 1.3f, posZ));
+
+                        // ALTURA FIJA: 0.4 unidades debajo de tus "ojos" (cámara), lo que simula tu pecho.
+                        float alturaPecho = SPAWN_Y - 0.4f;
+
+                        debugMat = glm::translate(debugMat, glm::vec3(posX, alturaPecho, posZ));
                         debugMat = glm::scale(debugMat, glm::vec3(0.08f));
 
                         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(debugMat));
+
                         glUniform3f(glGetUniformLocation(shader.ID, "colorTint"), 0.0f, 1.0f, 0.0f);
                         esferaModel.Draw(shader.ID);
                     }
-                    // TODO EL BLOQUE 'ELSE' CON LAS BOLAS MARRONES HA SIDO ELIMINADO AQUÍ
                 }
             }
         }

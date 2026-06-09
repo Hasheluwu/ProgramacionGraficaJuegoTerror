@@ -1,7 +1,6 @@
 #include "Model.h"
 #include "Mesh.h"
 #include "TextureUtils.h"
-
 #include <iostream>
 
 Model::Model(string const& path)
@@ -67,11 +66,21 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
             mesh->mVertices[i].z
         );
 
-        v.Normal = glm::vec3(
-            mesh->mNormals[i].x,
-            mesh->mNormals[i].y,
-            mesh->mNormals[i].z
-        );
+        // --- BLINDAJE ANTI-CRASH DE NORMALES ---
+        if (mesh->HasNormals())
+        {
+            v.Normal = glm::vec3(
+                mesh->mNormals[i].x,
+                mesh->mNormals[i].y,
+                mesh->mNormals[i].z
+            );
+        }
+        else
+        {
+            // Si Blender no exportó normales para esta cara, ponemos una por defecto
+            v.Normal = glm::vec3(0.0f, 1.0f, 0.0f);
+        }
+        // ---------------------------------------
 
         if (mesh->mTextureCoords[0])
         {
@@ -110,6 +119,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
 
     return Mesh(vertices, indices, textures);
 }
+
 
 vector<Texture> Model::loadMaterialTextures(
     aiMaterial* mat,
