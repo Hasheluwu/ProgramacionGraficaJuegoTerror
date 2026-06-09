@@ -63,10 +63,8 @@ int main()
     glDisable(GL_CULL_FACE); // <-- agregado
 
     // ---- Shaders ----
-    Shader shader("C:/Users/garci/source/repos/Project/iluminacion/vertex.glsl",
-        "C:/Users/garci/source/repos/Project/iluminacion/fragment.glsl");
-    Shader lampShader("C:/Users/garci/source/repos/Project/iluminacion/lamp.vert",
-        "C:/Users/garci/source/repos/Project/iluminacion/lamp.frag");
+    Shader shader("res/shaders/vertex.glsl", "res/shaders/fragment.glsl");
+    Shader lampShader("res/shaders/lamp.vert", "res/shaders/lamp.frag");
 
     // ---- Modelo ----
     Model model("res/Models/sotanoCorregido.obj");
