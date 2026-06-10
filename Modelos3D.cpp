@@ -128,7 +128,7 @@ int main()
     // Cambiá estos nombres si tus archivos se llaman diferente.
 
     Model sotanoCorregidoModel(
-        "Resources/Models/Casa/sotanoCorregido.obj"
+        "Resources/Models/Casa/sotano.obj"
     );
 
     Model puertaModel(
