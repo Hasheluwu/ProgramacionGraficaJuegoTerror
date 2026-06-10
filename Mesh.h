@@ -30,12 +30,16 @@ public:
     vector<unsigned int> indices;
     vector<Texture> textures;
 
+    glm::vec3 materialColor;
+    bool hasDiffuseTexture;
+
     unsigned int VAO;
 
     Mesh(
         vector<Vertex> vertices,
         vector<unsigned int> indices,
-        vector<Texture> textures
+        vector<Texture> textures,
+        glm::vec3 materialColor
     );
 
     void Draw(unsigned int shaderProgram);

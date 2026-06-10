@@ -12,7 +12,9 @@ Model::Model(string const& path)
 void Model::Draw(unsigned int shaderProgram)
 {
     for (unsigned int i = 0; i < meshes.size(); i++)
+    {
         meshes[i].Draw(shaderProgram);
+    }
 }
 
 void Model::loadModel(string const& path)
@@ -24,7 +26,8 @@ void Model::loadModel(string const& path)
     const aiScene* scene = importer.ReadFile(
         path,
         aiProcess_Triangulate |
-        aiProcess_GenNormals
+        aiProcess_GenNormals |
+        aiProcess_FlipUVs
     );
 
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
@@ -55,6 +58,8 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
     vector<Vertex> vertices;
     vector<unsigned int> indices;
     vector<Texture> textures;
+
+    glm::vec3 materialColor = glm::vec3(1.0f, 1.0f, 1.0f);
 
     for (unsigned int i = 0; i < mesh->mNumVertices; i++)
     {
@@ -99,12 +104,25 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
         aiFace face = mesh->mFaces[i];
 
         for (unsigned int j = 0; j < face.mNumIndices; j++)
+        {
             indices.push_back(face.mIndices[j]);
+        }
     }
 
     if (mesh->mMaterialIndex >= 0)
     {
         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+
+        aiColor3D diffuseColor(1.0f, 1.0f, 1.0f);
+
+        if (material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor) == AI_SUCCESS)
+        {
+            materialColor = glm::vec3(
+                diffuseColor.r,
+                diffuseColor.g,
+                diffuseColor.b
+            );
+        }
 
         vector<Texture> diffuseMaps =
             loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
@@ -112,7 +130,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene)
         textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
     }
 
-    return Mesh(vertices, indices, textures);
+    return Mesh(vertices, indices, textures, materialColor);
 }
 
 vector<Texture> Model::loadMaterialTextures(
@@ -133,7 +151,14 @@ vector<Texture> Model::loadMaterialTextures(
         texture.type = typeName;
         texture.path = str.C_Str();
 
-        textures.push_back(texture);
+        if (texture.id != 0)
+        {
+            textures.push_back(texture);
+        }
+        else
+        {
+            std::cout << "ERROR TEXTURA NO CARGADA: " << str.C_Str() << std::endl;
+        }
     }
 
     return textures;
