@@ -12,6 +12,10 @@
 #include <vector>
 #include <memory>
 
+#include <fstream>
+#include <string>
+#include "pathfinding.h"
+
 #include "Shader.h"
 #include "Model.h"
 #include "Player.h"
@@ -32,12 +36,9 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// Tamaño real actual de la ventana.
-// Esto evita que el juego 3D se estire en pantalla completa.
 int currentWindowWidth = SCR_WIDTH;
 int currentWindowHeight = SCR_HEIGHT;
 
-// Pantalla completa
 bool isFullscreen = false;
 bool mPressedLastFrame = false;
 
@@ -46,7 +47,7 @@ int windowedPosY = 100;
 int windowedWidth = SCR_WIDTH;
 int windowedHeight = SCR_HEIGHT;
 
-Player player(glm::vec3(0.0f, 2.0f, 8.0f));
+Player player(glm::vec3(129.0f, 5.0f, -98.0f));
 
 AudioManager audio;
 
@@ -58,6 +59,46 @@ float nextDoorKnockTime = 0.0f;
 
 bool pPressedLastFrame = false;
 
+// ==========================================
+// CONFIGURACIÓN DE LA MATRIZ DE COLISIONES
+// ==========================================
+const float OFFSET_X = -76.40f;
+const float OFFSET_Z = -24.00f;
+const float TAMANO_BLOQUE = 0.8f;
+const float CENTRO_BLOQUE = TAMANO_BLOQUE / 2.0f;
+const float NIVEL_DEL_SUELO = 2.27f;
+
+// ==================== CONFIGURACIÓN DEL MONSTRUO ====================
+const float MONSTER_HEIGHT = 2.3f;
+const float MONSTER_SPEED = 15.0f;
+// ===================================================================
+
+std::vector<std::vector<int>> laberinto;
+
+// Función para cargar la matriz
+std::vector<std::vector<int>> cargarLaberinto(const std::string& ruta)
+{
+    std::vector<std::vector<int>> matriz;
+    std::ifstream archivo(ruta);
+    if (!archivo.is_open())
+    {
+        std::cout << "--> ERROR CRITICO: No se encontro el archivo " << ruta << std::endl;
+        return matriz;
+    }
+    char c; int num; std::vector<int> filaActual;
+    while (archivo >> c)
+    {
+        if (c == '{') filaActual.clear();
+        else if (c == '}') { if (!filaActual.empty()) matriz.push_back(filaActual); }
+        else if (isdigit(c))
+        {
+            archivo.putback(c); archivo >> num; filaActual.push_back(num);
+        }
+        else if (c == ',') continue;
+    }
+    return matriz;
+}
+
 float RandomRange(float min, float max)
 {
     float random = (float)rand() / (float)RAND_MAX;
@@ -68,7 +109,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     currentWindowWidth = width;
     currentWindowHeight = height;
-
     glViewport(0, 0, width, height);
 }
 
@@ -214,32 +254,21 @@ int main()
     }
     else
     {
-        // Audio del menu / intro
         audio.LoadSound("intro", "Resources/Audio/intro.mp3", true);
-
-        // Audios del jugador
         audio.LoadSound("caminata", "Resources/Audio/caminata.mp3", true);
         audio.LoadSound("correr", "Resources/Audio/correr.mp3", true);
-
-        // Audios de puertas
         audio.LoadSound("abrir_puerta", "Resources/Audio/abrir_puerta.wav", false);
         audio.LoadSound("toque_puerta", "Resources/Audio/toque_puerta.wav", false);
-
-        // Audios de ambiente
         audio.LoadSound("sonido_luces", "Resources/Audio/sonido_luces.wav", true);
         audio.LoadSound("sonido_tension", "Resources/Audio/sonido_tension.mp3", false);
         audio.LoadSound("risa_tension", "Resources/Audio/risa_tension.mp3", false);
         audio.LoadSound("recoger", "Resources/Audio/recoger.mp3", false);
 
-        // Volumenes
         audio.SetVolume("intro", 0.45f);
-
         audio.SetVolume("caminata", 0.35f);
         audio.SetVolume("correr", 0.45f);
-
         audio.SetVolume("abrir_puerta", 0.8f);
         audio.SetVolume("toque_puerta", 0.8f);
-
         audio.SetVolume("sonido_luces", 0.55f);
         audio.SetVolume("sonido_tension", 0.45f);
         audio.SetVolume("risa_tension", 0.35f);
@@ -249,6 +278,99 @@ int main()
         nextLaughSoundTime = RandomRange(60.0f, 120.0f);
         nextDoorKnockTime = 40.0f;
     }
+
+    // ==========================================================
+    // CARGAR MATRIZ DE COLISIONES
+    // ==========================================================
+    std::cout << "[INFO] Cargando matriz de colisiones..." << std::endl;
+    laberinto = cargarLaberinto("C:/Users/hashe/OneDrive/Escritorio/Graficauwu/Resources/Models/Casa/matriz_tremenuwu.txt");
+    if (laberinto.empty())
+    {
+        std::cout << "ADVERTENCIA: La matriz de colisiones está vacía o no se pudo cargar. No habrá colisiones." << std::endl;
+    }
+    else
+    {
+        std::cout << "Matriz de colisiones cargada correctamente (" << laberinto.size() << " filas)." << std::endl;
+    }
+
+    // ==================== INICIALIZACIÓN DEL MONSTRUO ====================
+    Pathfinding iaMonstruo;
+    iaMonstruo.temperatura = 0.3f;
+
+    std::vector<glm::ivec2> waypointsMonstruo;
+    if (!laberinto.empty()) {
+        for (int f = 0; f < (int)laberinto.size(); ++f)
+            for (int c = 0; c < (int)laberinto[f].size(); ++c)
+                if (laberinto[f][c] == 2)
+                    waypointsMonstruo.push_back(glm::ivec2(c, f));
+        std::cout << "[IA] Waypoints encontrados: " << waypointsMonstruo.size() << std::endl;
+    }
+
+    // --- AGRUPAR WAYPOINTS PARA DEJAR SOLO UNO POR GRUPO ---
+    std::vector<glm::ivec2> waypointsUnicos;
+    if (!waypointsMonstruo.empty()) {
+        const float DISTANCIA_AGRUPACION = 2.0f; // celdas de distancia máxima para considerar mismo grupo
+        std::vector<bool> usado(waypointsMonstruo.size(), false);
+        for (size_t i = 0; i < waypointsMonstruo.size(); ++i) {
+            if (usado[i]) continue;
+            glm::ivec2 wp = waypointsMonstruo[i];
+            waypointsUnicos.push_back(wp);
+            // Marcar todos los que estén cerca
+            for (size_t j = i + 1; j < waypointsMonstruo.size(); ++j) {
+                if (usado[j]) continue;
+                float dist = glm::length(glm::vec2(waypointsMonstruo[j] - wp));
+                if (dist < DISTANCIA_AGRUPACION) {
+                    usado[j] = true;
+                }
+            }
+        }
+        std::cout << "[IA] Waypoints únicos: " << waypointsUnicos.size() << std::endl;
+    }
+    // Ahora usaremos waypointsUnicos en lugar de waypointsMonstruo para los destinos
+    // ================================================================
+
+    // Posición inicial (misma que el jugador)
+    glm::vec3 monsterPos(129.0f, MONSTER_HEIGHT, -98.0f);
+    int currentWaypointIndex = 0;
+    std::vector<glm::vec3> rutaSuaveMundo;
+    size_t indiceRutaActual = 0;
+
+    // Verificar que la posición inicial sea válida
+    if (!laberinto.empty()) {
+        int initC = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
+        int initF = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
+        if (initF >= 0 && initF < (int)laberinto.size() && initC >= 0 && initC < (int)laberinto[0].size()) {
+            if (laberinto[initF][initC] == 1) {
+                std::cout << "[ERROR] Posicion inicial del monstruo dentro de una pared!" << std::endl;
+                if (!waypointsUnicos.empty()) {
+                    glm::ivec2 wp = waypointsUnicos[rand() % waypointsUnicos.size()];
+                    monsterPos.x = OFFSET_X + wp.x * TAMANO_BLOQUE + CENTRO_BLOQUE;
+                    monsterPos.z = -(OFFSET_Z + wp.y * TAMANO_BLOQUE + CENTRO_BLOQUE);
+                    std::cout << "[INFO] Monstruo reposicionado en waypoint." << std::endl;
+                }
+            }
+        }
+    }
+
+    if (!waypointsUnicos.empty() && !laberinto.empty()) {
+        glm::ivec2 destino = waypointsUnicos[rand() % waypointsUnicos.size()];
+
+        int startC = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
+        int startF = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
+        startC = std::max(0, std::min(startC, (int)laberinto[0].size() - 1));
+        startF = std::max(0, std::min(startF, (int)laberinto.size() - 1));
+
+        std::vector<glm::ivec2> cruda = iaMonstruo.PlanificarRuta(glm::ivec2(startC, startF), destino, laberinto, iaMonstruo.temperatura);
+        std::vector<glm::ivec2> suave = iaMonstruo.SuavizarCamino(cruda, laberinto);
+
+        for (auto& p : suave) {
+            float px = OFFSET_X + (p.x * TAMANO_BLOQUE) + CENTRO_BLOQUE;
+            float pz = -(OFFSET_Z + (p.y * TAMANO_BLOQUE) + CENTRO_BLOQUE);
+            rutaSuaveMundo.push_back(glm::vec3(px, MONSTER_HEIGHT, pz));
+        }
+        indiceRutaActual = 0;
+    }
+    // =====================================================================
 
     // ==========================================================
     // SHADERS
@@ -264,7 +386,6 @@ int main()
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
-    // Reproducir audio de intro mientras esta el menu
     if (!audio.IsPlaying("intro"))
     {
         audio.Play("intro");
@@ -276,6 +397,7 @@ int main()
     menu.state = MenuState::LOADING;
 
     Model* model = nullptr;
+    Model* monsterModel = nullptr;
 
     float fakeProgress = 0.0f;
     float loadLastFrame = (float)glfwGetTime();
@@ -292,7 +414,6 @@ int main()
         if (fakeProgress < 0.9f)
         {
             fakeProgress += dt * 0.30f;
-
             if (fakeProgress > 0.9f)
                 fakeProgress = 0.9f;
         }
@@ -310,7 +431,8 @@ int main()
 
         if (fakeProgress >= 0.9f)
         {
-            model = new Model("Resources/Models/Casa/sotanoCorregido.obj");
+            model = new Model("Resources/Models/Casa/sotano2.obj");
+            monsterModel = new Model("Resources/Models/Casa/sphere/scene.gltf");
 
             modelLoaded = true;
 
@@ -371,6 +493,7 @@ int main()
     if (glfwWindowShouldClose(window))
     {
         delete model;
+        delete monsterModel;
         audio.Shutdown();
         glfwTerminate();
         return 0;
@@ -379,8 +502,6 @@ int main()
     // ==========================================================
     // ENTRAR AL JUEGO
     // ==========================================================
-
-    // Detener audio de intro al iniciar partida
     if (audio.IsPlaying("intro"))
     {
         audio.Stop("intro");
@@ -570,9 +691,133 @@ int main()
 
         CheckFullscreenKey(window);
 
+        glm::vec3 oldPos = player.camera.Position;
+
         player.ProcessInput(window, deltaTime);
         player.UpdatePhysics(deltaTime);
         player.UpdateFlashlight();
+
+        // ==========================================================
+        // LÓGICA DE COLISIONES (paredes) – jugador
+        // ==========================================================
+        if (!laberinto.empty())
+        {
+            if (player.camera.Position.y < (NIVEL_DEL_SUELO + 3.0f))
+            {
+                float margen = 0.15f;
+                float blenderZ_cam = -player.camera.Position.z;
+
+                int fMin = (int)floor(((blenderZ_cam - margen) - OFFSET_Z) / TAMANO_BLOQUE);
+                int fMax = (int)floor(((blenderZ_cam + margen) - OFFSET_Z) / TAMANO_BLOQUE);
+                int cIzq = (int)floor(((player.camera.Position.x - margen) - OFFSET_X) / TAMANO_BLOQUE);
+                int cDer = (int)floor(((player.camera.Position.x + margen) - OFFSET_X) / TAMANO_BLOQUE);
+
+                if (fMin < 0 || fMax >= (int)laberinto.size() ||
+                    cIzq < 0 || cDer >= (int)laberinto[0].size() ||
+                    laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 ||
+                    laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1)
+                {
+                    player.camera.Position.x = oldPos.x;
+                    player.camera.Position.z = oldPos.z;
+                }
+            }
+        }
+
+        // ==================== ACTUALIZACIÓN DEL MONSTRUO ====================
+        // Guardar posición anterior para revertir en caso de colisión
+        glm::vec3 oldMonsterPos = monsterPos;
+
+        if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size()) {
+            glm::vec3 target = rutaSuaveMundo[indiceRutaActual];
+            glm::vec3 dir = target - monsterPos;
+            float dist = glm::length(dir);
+
+            if (dist > 0.1f) {
+                dir = glm::normalize(dir);
+                monsterPos += dir * MONSTER_SPEED * deltaTime;
+            }
+            else {
+                indiceRutaActual++;
+            }
+        }
+        else if (!waypointsUnicos.empty() && !laberinto.empty()) {
+            int nuevoWP = rand() % waypointsUnicos.size();
+            glm::ivec2 destino = waypointsUnicos[nuevoWP];
+
+            int startC = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
+            int startF = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
+            startC = std::max(0, std::min(startC, (int)laberinto[0].size() - 1));
+            startF = std::max(0, std::min(startF, (int)laberinto.size() - 1));
+
+            std::vector<glm::ivec2> cruda = iaMonstruo.PlanificarRuta(glm::ivec2(startC, startF), destino, laberinto, iaMonstruo.temperatura);
+            std::vector<glm::ivec2> suave = iaMonstruo.SuavizarCamino(cruda, laberinto);
+
+            rutaSuaveMundo.clear();
+            for (auto& p : suave) {
+                float px = OFFSET_X + (p.x * TAMANO_BLOQUE) + CENTRO_BLOQUE;
+                float pz = -(OFFSET_Z + (p.y * TAMANO_BLOQUE) + CENTRO_BLOQUE);
+                rutaSuaveMundo.push_back(glm::vec3(px, MONSTER_HEIGHT, pz));
+            }
+            indiceRutaActual = 0;
+        }
+
+        // --- Hitbox del monstruo (pequeño y "permisivo" cerca del objetivo) ---
+        if (!laberinto.empty()) {
+            float margenMonster = 0.08f;   // margen mínimo
+            float blenderZ_monster = -monsterPos.z;
+
+            int fMin = (int)floor(((blenderZ_monster - margenMonster) - OFFSET_Z) / TAMANO_BLOQUE);
+            int fMax = (int)floor(((blenderZ_monster + margenMonster) - OFFSET_Z) / TAMANO_BLOQUE);
+            int cIzq = (int)floor(((monsterPos.x - margenMonster) - OFFSET_X) / TAMANO_BLOQUE);
+            int cDer = (int)floor(((monsterPos.x + margenMonster) - OFFSET_X) / TAMANO_BLOQUE);
+
+            bool colisionPared = false;
+            if (fMin < 0 || fMax >= (int)laberinto.size() ||
+                cIzq < 0 || cDer >= (int)laberinto[0].size()) {
+                colisionPared = true;   // fuera del mapa
+            }
+            else if (laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 ||
+                laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1) {
+                colisionPared = true;
+            }
+
+            // Si estamos cerca del punto de ruta actual y ese punto está en celda 0, permitimos ignorar la colisión
+            bool cercaDePuntoRuta = false;
+            if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size()) {
+                float distAlPunto = glm::length(monsterPos - rutaSuaveMundo[indiceRutaActual]);
+                if (distAlPunto < 0.5f) {
+                    // Verificar que la celda del punto sea transitable
+                    glm::vec3 punto = rutaSuaveMundo[indiceRutaActual];
+                    int pC = (int)floor((punto.x - OFFSET_X) / TAMANO_BLOQUE);
+                    int pF = (int)floor((-punto.z - OFFSET_Z) / TAMANO_BLOQUE);
+                    if (pF >= 0 && pF < (int)laberinto.size() && pC >= 0 && pC < (int)laberinto[0].size() &&
+                        laberinto[pF][pC] == 0) {
+                        cercaDePuntoRuta = true;
+                    }
+                }
+            }
+
+            if (colisionPared && !cercaDePuntoRuta) {
+                monsterPos = oldMonsterPos;
+                std::cout << "[MONSTRUO] Hitbox detecto pared. Revertido." << std::endl;
+            }
+        }
+
+        // Debug: posición y celda cada segundo
+        static float debugTimer = 0.0f;
+        debugTimer += deltaTime;
+        if (debugTimer >= 1.0f) {
+            debugTimer = 0.0f;
+            int cellX = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
+            int cellZ = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
+            if (cellZ >= 0 && cellZ < (int)laberinto.size() && cellX >= 0 && cellX < (int)laberinto[0].size()) {
+                std::cout << "[MONSTRUO] Pos: (" << monsterPos.x << ", " << monsterPos.z << ") celda [" << cellZ << "," << cellX << "] = " << laberinto[cellZ][cellX] << std::endl;
+            }
+            else {
+                std::cout << "[MONSTRUO] FUERA DEL MAPA!" << std::endl;
+            }
+        }
+        // =====================================================================
 
         // ==========================================================
         // DEBUG CON P
@@ -954,13 +1199,7 @@ int main()
             player.camera.Position.z
         );
 
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.ID, "model"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(modelMat)
-        );
-
+        // Configurar view y projection antes de dibujar geometría
         glUniformMatrix4fv(
             glGetUniformLocation(shader.ID, "view"),
             1,
@@ -975,17 +1214,39 @@ int main()
             glm::value_ptr(projection)
         );
 
+        // Dibujar modelo del sótano
+        glUniformMatrix4fv(
+            glGetUniformLocation(shader.ID, "model"),
+            1,
+            GL_FALSE,
+            glm::value_ptr(modelMat)
+        );
         model->Draw(shader.ID);
 
+        // Dibujar puertas
         for (auto& door : doors)
         {
             door->Draw(shader.ID, modelMat);
         }
 
+        // ==================== DIBUJAR MONSTRUO (esfera brillante, sin sombras) ====================
+        lampShader.use();
+        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+        glm::mat4 monsterMat = glm::mat4(1.0f);
+        monsterMat = glm::translate(monsterMat, monsterPos);
+        monsterMat = glm::scale(monsterMat, glm::vec3(0.12f));
+
+        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(monsterMat));
+        // Color rojo intenso
+        glUniform3f(glGetUniformLocation(lampShader.ID, "lampColor"), 1.0f, 0.2f, 0.2f);
+        monsterModel->Draw(lampShader.ID);
+
         // ==========================================================
         // DIBUJAR CUBOS DE LÁMPARAS
         // ==========================================================
-        lampShader.use();
+        lampShader.use();   // Ya está activo, solo aseguramos
 
         glUniformMatrix4fv(
             glGetUniformLocation(lampShader.ID, "view"),
@@ -1035,6 +1296,7 @@ int main()
     }
 
     delete model;
+    delete monsterModel;
 
     glDeleteVertexArrays(1, &lampVAO);
     glDeleteBuffers(1, &lampVBO);

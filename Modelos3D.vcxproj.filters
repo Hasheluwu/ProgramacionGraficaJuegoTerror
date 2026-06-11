@@ -95,6 +95,9 @@
     <ClInclude Include="stb_truetype.h">
       <Filter>Archivos de encabezado</Filter>
     </ClInclude>
+    <ClInclude Include="pathfinding.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Modelos3D.rc">
