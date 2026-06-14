@@ -111,13 +111,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)vendor\GLFW\include;$(ProjectDir)vendor\glad\include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\SOIL2\src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\DELL\OneDrive\Documentos\assimp\build\include;C:\Users\DELL\OneDrive\Documentos\assimp\include;C:\Users\DELL\OneDrive\Documentos\SOIL2\SOIL2\src;C:\Users\DELL\OneDrive\Documentos\glad\include;C:\Users\DELL\OneDrive\Documentos\glm;C:\Users\DELL\OneDrive\Documentos\glfw-3.4\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(ProjectDir)vendor\GLFW\lib-vc2022;$(ProjectDir)vendor\SOIL2\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);glfw3.lib;opengl32.lib;soil2.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\DELL\OneDrive\Documentos\glfw-3.4\build\src\Debug;C:\Users\DELL\OneDrive\Documentos\SOIL2\SOIL2\lib\windows;C:\Users\DELL\OneDrive\Documentos\assimp\build\lib\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);soil2-debug.lib;opengl32.lib;shell32.lib;user32.lib;glfw3.lib;gdi32.lib;assimp-vc145-mtd.lib</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
@@ -132,46 +132,64 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)vendor\GLFW\include;$(ProjectDir)vendor\glad\include;$(ProjectDir)vendor\glm;$(ProjectDir)vendor\SOIL2\src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\DELL\OneDrive\Documentos\assimp\build\include;C:\Users\DELL\OneDrive\Documentos\assimp\include;C:\Users\DELL\OneDrive\Documentos\SOIL2\SOIL2\src;C:\Users\DELL\OneDrive\Documentos\glad\include;C:\Users\DELL\OneDrive\Documentos\glm;C:\Users\DELL\OneDrive\Documentos\glfw-3.4\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(ProjectDir)vendor\GLFW\lib-vc2022;$(ProjectDir)vendor\SOIL2\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);glfw3.lib;opengl32.lib;soil2.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\DELL\OneDrive\Documentos\glfw-3.4\build\src\Debug;C:\Users\DELL\OneDrive\Documentos\SOIL2\SOIL2\lib\windows;C:\Users\DELL\OneDrive\Documentos\assimp\build\lib\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);soil2-debug.lib;opengl32.lib;shell32.lib;user32.lib;glfw3.lib;gdi32.lib;assimp-vc145-mtd.lib</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AudioManager.cpp" />
+    <ClCompile Include="Door.cpp" />
+    <ClCompile Include="HUD.cpp" />
+    <ClCompile Include="ItemSystem.cpp" />
+    <ClCompile Include="LightSystem.cpp" />
+    <ClCompile Include="Menu.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Model.cpp" />
-    <ClCompile Include="Modelos3D.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="Player.cpp" />
     <ClCompile Include="Shader.cpp" />
-    <ClCompile Include="Skybox.cpp" />
-    <ClCompile Include="TextureUtils.cpp" />
+    <ClCompile Include="stb_impl.cpp" />
+    <ClCompile Include="TextureUtils.cpp">
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Users\DELL\OneDrive\Documentos\glfw-3.4\include;C:\Users\DELL\OneDrive\Documentos\glad\include;C:\Users\DELL\OneDrive\Documentos\glm;C:\Users\DELL\OneDrive\Documentos\assimp\build\include;C:\Users\DELL\OneDrive\Documentos\assimp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Users\DELL\OneDrive\Documentos\glfw-3.4\include;C:\Users\DELL\OneDrive\Documentos\glad\include;C:\Users\DELL\OneDrive\Documentos\glm;C:\Users\DELL\OneDrive\Documentos\assimp\build\include;C:\Users\DELL\OneDrive\Documentos\assimp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="vendor\glad\src\glad.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AudioManager.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="Door.h" />
+    <ClInclude Include="HUD.h" />
+    <ClInclude Include="ItemSystem.h" />
+    <ClInclude Include="LightSystem.h" />
+    <ClInclude Include="Menu.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Model.h" />
+    <ClInclude Include="pathfinding.h" />
+    <ClInclude Include="Player.h" />
+    <ClInclude Include="Raycast.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Shader.h" />
-    <ClInclude Include="Skybox.h" />
+    <ClInclude Include="stb_truetype.h" />
     <ClInclude Include="TextureUtils.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="Modelos3D.rc" />
-  </ItemGroup>
-  <ItemGroup>
     <Text Include="shaders\fragment.glsl" />
-    <Text Include="shaders\skybox.vert" />
     <Text Include="shaders\vertex.glsl" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\skybox.frag" />
+    <None Include="shaders\lamp.frag" />
+    <None Include="shaders\lamp.vert" />
+    <None Include="shaders\shadow_depth.frag" />
+    <None Include="shaders\shadow_depth.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

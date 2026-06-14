@@ -2,18 +2,48 @@
 
 #include <glad/glad.h>
 #include <iostream>
+#include <string>
 
-Mesh::Mesh(vector<Vertex> vertices, vector<unsigned int> indices, vector<Texture> textures)
+Mesh::Mesh(
+    vector<Vertex> vertices,
+    vector<unsigned int> indices,
+    vector<Texture> textures,
+    glm::vec3 materialColor)
 {
     this->vertices = vertices;
     this->indices = indices;
     this->textures = textures;
+    this->materialColor = materialColor;
+
+    this->hasDiffuseTexture = false;
+
+    for (unsigned int i = 0; i < textures.size(); i++)
+    {
+        if (textures[i].type == "texture_diffuse")
+        {
+            this->hasDiffuseTexture = true;
+            break;
+        }
+    }
 
     setupMesh();
 }
 
 void Mesh::Draw(unsigned int shaderProgram)
 {
+    glUseProgram(shaderProgram);
+
+    glUniform3fv(
+        glGetUniformLocation(shaderProgram, "materialColor"),
+        1,
+        &materialColor[0]
+    );
+
+    glUniform1i(
+        glGetUniformLocation(shaderProgram, "hasDiffuseTexture"),
+        hasDiffuseTexture ? 1 : 0
+    );
+
     unsigned int diffuseNr = 1;
 
     for (unsigned int i = 0; i < textures.size(); i++)
@@ -28,8 +58,10 @@ void Mesh::Draw(unsigned int shaderProgram)
             number = std::to_string(diffuseNr++);
         }
 
+        string uniformName = name + number;
+
         glUniform1i(
-            glGetUniformLocation(shaderProgram, (name + number).c_str()),
+            glGetUniformLocation(shaderProgram, uniformName.c_str()),
             i
         );
 
@@ -48,6 +80,7 @@ void Mesh::Draw(unsigned int shaderProgram)
     glBindVertexArray(0);
 
     glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Mesh::setupMesh()
@@ -76,7 +109,6 @@ void Mesh::setupMesh()
         GL_STATIC_DRAW
     );
 
-    // Posición
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(
         0,
@@ -87,7 +119,6 @@ void Mesh::setupMesh()
         (void*)0
     );
 
-    // Normal
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(
         1,
@@ -98,7 +129,6 @@ void Mesh::setupMesh()
         (void*)offsetof(Vertex, Normal)
     );
 
-    // Coordenadas UV
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(
         2,

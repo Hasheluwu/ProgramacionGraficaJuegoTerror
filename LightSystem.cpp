@@ -1,8 +1,9 @@
 #include "LightSystem.h"
+
 #include <glm/glm.hpp>
 #include <cmath>
-#include <cstdlib>   // rand(), srand()
-#include <ctime>     // time()
+#include <cstdlib>
+#include <ctime>
 
 LightSystem::LightSystem()
 {
@@ -45,44 +46,65 @@ LightSystem::LightSystem()
     lampPositions[34] = glm::vec3(129.480f, 5.3f, -131.970f);
 
     for (int i = 0; i < NUM_LAMPS; i++)
+    {
         flickerOffset[i] = i * 1.3f;
+        intensities[i] = 1.0f;
+        lampEnabled[i] = false;
+    }
 
-    for (int i = 0; i < NUM_LAMPS; i++)
-        lampEnabled[i] = true;
+    // Luces activas seleccionadas.
+    // Ajustamos esto para que no haya demasiadas lamparas en el techo.
 
-    lampEnabled[0] = false;
-    lampEnabled[1] = false;
+    // Zonas iniciales / pasillos
+    lampEnabled[6] = true;
+    lampEnabled[8] = true;
 
-    // --- Pool de eventos (puedes ajustar las duraciones) ---
-    eventPool[0] = { STABLE,              6.0f };  // todas estables
-    eventPool[1] = { FLICKER,             4.0f };  // solo parpadeo
-    eventPool[2] = { BLACKOUT,            4.0f };  // solo apagado
-    eventPool[3] = { FLICKER_AND_BLACKOUT, 5.0f }; // parpadeo + apagado combinado
+    // Zona central / pasillos internos
+    lampEnabled[11] = true;
+    lampEnabled[13] = true;
+    lampEnabled[16] = true;
+    lampEnabled[18] = true;
 
-    // Arrancar con un evento aleatorio
-    activeEvent = eventPool[rand() % NUM_EVENTS];
+    // Zonas laterales
+    lampEnabled[21] = true;
+    lampEnabled[23] = true;
+    lampEnabled[26] = true;
+
+    // Cuarto gigante: solo dos luces bien separadas
+    lampEnabled[29] = true;
+    lampEnabled[34] = true;
+
+    eventPool[0] = { STABLE, 7.0f };
+    eventPool[1] = { FLICKER, 4.0f };
+    eventPool[2] = { BLACKOUT, 4.0f };
+    eventPool[3] = { FLICKER_AND_BLACKOUT, 5.0f };
+
+    activeEvent = eventPool[0];
+
     eventTimer = 0.0f;
+    lightsFlickering = false;
 }
 
-// --------------------------------------------------
 void LightSystem::pickNextEvent()
 {
-    // Sortea hasta sacar uno distinto al actual (evita repetir el mismo dos veces seguidas)
     int next;
 
     if (activeEvent.state == BLACKOUT)
     {
-        activeEvent = eventPool[0];  // eventPool[0] = STABLE
+        lastState = activeEvent.state;
+        activeEvent = eventPool[0];
         return;
     }
 
     if (activeEvent.state == FLICKER_AND_BLACKOUT)
     {
-        activeEvent = eventPool[0];  // eventPool[0] = STABLE
+        lastState = activeEvent.state;
+        activeEvent = eventPool[0];
         return;
     }
 
-    do {
+    do
+    {
         next = rand() % NUM_EVENTS;
     } while (eventPool[next].state == activeEvent.state);
 
@@ -90,14 +112,23 @@ void LightSystem::pickNextEvent()
     activeEvent = eventPool[next];
 }
 
-// --------------------------------------------------
 void LightSystem::Update(float deltaTime, float currentFrame, glm::vec3 cameraPos)
 {
     eventTimer += deltaTime;
+
     if (eventTimer >= activeEvent.duration)
     {
         eventTimer = 0.0f;
         pickNextEvent();
+    }
+
+    if (activeEvent.state == FLICKER || activeEvent.state == FLICKER_AND_BLACKOUT)
+    {
+        lightsFlickering = true;
+    }
+    else
+    {
+        lightsFlickering = false;
     }
 
     for (int i = 0; i < NUM_LAMPS; i++)
@@ -108,35 +139,47 @@ void LightSystem::Update(float deltaTime, float currentFrame, glm::vec3 cameraPo
         switch (activeEvent.state)
         {
         case STABLE:
+        {
             flicker = 0.95f + 0.05f * sin(t * 1.5f);
-            break;
+        }
+        break;
 
         case FLICKER:
+        {
             flicker = 0.85f + 0.15f * sin(t * 20.0f);
+
+            float glitch = sin(t * 37.0f) * sin(t * 13.0f);
+
+            if (glitch > 0.6f)
             {
-                float glitch = sin(t * 37.0f) * sin(t * 13.0f);
-                if (glitch > 0.6f) flicker *= 0.05f;
+                flicker *= 0.05f;
             }
-            break;
+        }
+        break;
 
         case BLACKOUT:
         {
             float dist = glm::length(cameraPos - lampPositions[i]);
             float nearFactor = glm::clamp(1.0f - dist / 20.0f, 0.0f, 1.0f);
+
             flicker = 0.02f + 0.03f * nearFactor * sin(t * 5.0f);
         }
         break;
 
         case FLICKER_AND_BLACKOUT:
         {
-            // Parpadeo agresivo que termina casi apagado
             flicker = 0.85f + 0.15f * sin(t * 20.0f);
-            float glitch = sin(t * 37.0f) * sin(t * 13.0f);
-            if (glitch > 0.6f) flicker *= 0.05f;
 
-            // Ademas se apaga mas segun distancia al jugador
+            float glitch = sin(t * 37.0f) * sin(t * 13.0f);
+
+            if (glitch > 0.6f)
+            {
+                flicker *= 0.05f;
+            }
+
             float dist = glm::length(cameraPos - lampPositions[i]);
             float nearFactor = glm::clamp(1.0f - dist / 25.0f, 0.0f, 1.0f);
+
             flicker *= (0.3f + 0.7f * nearFactor);
         }
         break;
@@ -144,6 +187,9 @@ void LightSystem::Update(float deltaTime, float currentFrame, glm::vec3 cameraPo
 
         intensities[i] = glm::clamp(flicker, 0.0f, 1.0f);
 
-        if (!lampEnabled[i]) intensities[i] = 0.0f;
+        if (!lampEnabled[i])
+        {
+            intensities[i] = 0.0f;
+        }
     }
 }
