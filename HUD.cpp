@@ -37,15 +37,41 @@ void main()
 }
 )";
 
+static const char* RECT_VERT = R"(
+#version 330 core
+layout (location = 0) in vec2 pos;
+uniform mat4 projection;
+uniform vec2 rectPos;
+uniform vec2 rectSize;
+void main()
+{
+    vec2 finalPos = rectPos + pos * rectSize;
+    gl_Position = projection * vec4(finalPos, 0.0, 1.0);
+}
+)";
+
+static const char* RECT_FRAG = R"(
+#version 330 core
+out vec4 FragColor;
+uniform vec4 rectColor;
+void main()
+{
+    FragColor = rectColor;
+}
+)";
+
 // ==============================================================
 
 HUD::HUD() {}
 HUD::~HUD()
 {
-    if (VAO)           glDeleteVertexArrays(1, &VAO);
-    if (VBO)           glDeleteBuffers(1, &VBO);
-    if (fontTexture)   glDeleteTextures(1, &fontTexture);
-    if (shaderProgram) glDeleteProgram(shaderProgram);
+    if (VAO)              glDeleteVertexArrays(1, &VAO);
+    if (VBO)              glDeleteBuffers(1, &VBO);
+    if (fontTexture)      glDeleteTextures(1, &fontTexture);
+    if (shaderProgram)    glDeleteProgram(shaderProgram);
+    if (rectVAO)          glDeleteVertexArrays(1, &rectVAO);
+    if (rectVBO)          glDeleteBuffers(1, &rectVBO);
+    if (rectShaderProgram) glDeleteProgram(rectShaderProgram);
 }
 
 bool HUD::Init(const std::string& fontPath, int w, int h)
@@ -55,6 +81,7 @@ bool HUD::Init(const std::string& fontPath, int w, int h)
 
     if (!BuildShader()) return false;
     if (!BuildFont(fontPath)) return false;
+    if (!BuildRectShader()) return false;
 
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -86,7 +113,6 @@ void HUD::Resize(int w, int h)
 // ==============================================================
 void HUD::Render(const HUDState& s)
 {
-    if (!ready) return;
 
     GLboolean depthTest, blend;
     glGetBooleanv(GL_DEPTH_TEST, &depthTest);
@@ -98,10 +124,38 @@ void HUD::Render(const HUDState& s)
 
     float cx = screenW * 0.5f;
     float cy = screenH * 0.5f;
+    float barW = 200.0f;
+    float barH = 18.0f;
+    float barX = (float)screenW - barW - 20.0f;
+    float barY = (float)screenH - 40.0f;
+
+    float pct = glm::clamp(s.stamina / s.staminaMax, 0.0f, 1.0f);
 
     // ---- Mira (crosshair) ----
     DrawText("+", cx - 6.0f, cy - 10.0f, 1.0f,
         glm::vec4(1.0f, 1.0f, 1.0f, 0.75f));
+
+    DrawRect(barX, barY, barW, 2.0f, glm::vec4(1, 1, 1, 0.25f));        // arriba
+    DrawRect(barX, barY + barH - 2.0f, barW, 2.0f, glm::vec4(1, 1, 1, 0.25f)); // abajo
+    DrawRect(barX, barY, 2.0f, barH, glm::vec4(1, 1, 1, 0.25f));        // izquierda
+    DrawRect(barX + barW - 2.0f, barY, 2.0f, barH, glm::vec4(1, 1, 1, 0.25f)); // derecha
+    // Fondo (oscuro semi-transparente)
+    DrawRect(barX - 2.0f, barY - 2.0f, barW + 4.0f, barH + 4.0f,
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.5f));
+
+    // Relleno
+    glm::vec4 fillColor;
+    if (s.isExhausted)
+        fillColor = glm::vec4(0.6f, 0.15f, 0.15f, 0.9f); // rojo: agotado
+    else if (pct < 0.3f)
+        fillColor = glm::vec4(0.85f, 0.65f, 0.1f, 0.9f); // amarillo: bajo
+    else
+        fillColor = glm::vec4(0.2f, 0.75f, 0.3f, 0.9f);  // verde: normal
+
+    DrawRect(barX, barY, barW * pct, barH, fillColor);
+
+    
+    if (!ready) return;
 
     // ---- Icono de llave (esquina inf-izq) ----
     if (s.hasKey)
@@ -405,4 +459,79 @@ void HUD::UpdateProjection()
         glGetUniformLocation(shaderProgram, "projection"),
         1, GL_FALSE, glm::value_ptr(proj)
     );
+
+    if (rectShaderProgram)
+    {
+        glUseProgram(rectShaderProgram);
+        glUniformMatrix4fv(
+            glGetUniformLocation(rectShaderProgram, "projection"),
+            1, GL_FALSE, glm::value_ptr(proj)
+        );
+    }
+}
+
+bool HUD::BuildRectShader()
+{
+    auto compile = [](GLenum type, const char* src) -> unsigned int
+        {
+            unsigned int id = glCreateShader(type);
+            glShaderSource(id, 1, &src, nullptr);
+            glCompileShader(id);
+            int ok; glGetShaderiv(id, GL_COMPILE_STATUS, &ok);
+            if (!ok) {
+                char log[512]; glGetShaderInfoLog(id, 512, nullptr, log);
+                std::cout << "[HUD] Rect shader error: " << log << std::endl;
+            }
+            return id;
+        };
+
+    unsigned int vs = compile(GL_VERTEX_SHADER, RECT_VERT);
+    unsigned int fs = compile(GL_FRAGMENT_SHADER, RECT_FRAG);
+
+    rectShaderProgram = glCreateProgram();
+    glAttachShader(rectShaderProgram, vs);
+    glAttachShader(rectShaderProgram, fs);
+    glLinkProgram(rectShaderProgram);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    int ok; glGetProgramiv(rectShaderProgram, GL_LINK_STATUS, &ok);
+    if (!ok) {
+        char log[512]; glGetProgramInfoLog(rectShaderProgram, 512, nullptr, log);
+        std::cout << "[HUD] Rect link error: " << log << std::endl;
+        return false;
+    }
+
+    float quad[] = {
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+        1.0f, 1.0f,
+        0.0f, 0.0f,
+        1.0f, 1.0f,
+        0.0f, 1.0f
+    };
+
+    glGenVertexArrays(1, &rectVAO);
+    glGenBuffers(1, &rectVBO);
+    glBindVertexArray(rectVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, rectVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return true;
+}
+
+void HUD::DrawRect(float x, float y, float w, float h, glm::vec4 color)
+{
+    glUseProgram(rectShaderProgram);
+    glUniform2f(glGetUniformLocation(rectShaderProgram, "rectPos"), x, y);
+    glUniform2f(glGetUniformLocation(rectShaderProgram, "rectSize"), w, h);
+    glUniform4f(glGetUniformLocation(rectShaderProgram, "rectColor"), color.r, color.g, color.b, color.a);
+
+    glBindVertexArray(rectVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
 }

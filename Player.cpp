@@ -11,7 +11,10 @@ Player::Player(glm::vec3 startPos)
     eyeHeight(HEIGHT_STAND),
     prevSpace(false),
     prevTab(false),
-    prevFlashlight(false)
+    prevFlashlight(false),
+    stamina(STAMINA_MAX),
+    isExhausted(false),
+    staminaRegenTimer(0.0f)
 {
     flashlight.on = false;
     flashlight.position = startPos;
@@ -27,6 +30,14 @@ void Player::ProcessInput(GLFWwindow* window, float deltaTime)
     bool sprinting =
         glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
         glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
+
+    bool moving =
+        glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
+
+    updateStamina(deltaTime, sprinting, moving);
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         move(FORWARD, deltaTime, sprinting);
@@ -111,9 +122,17 @@ void Player::UpdateFlashlight()
 }
 
 // --------------------------------------------------
+// --------------------------------------------------
 void Player::move(Camera_Movement dir, float deltaTime, bool sprinting)
 {
-    float speed = sprinting ? PLAYER_SPRINT_SPEED : PLAYER_SPEED;
+    float speed;
+
+    if (isExhausted)
+        speed = PLAYER_SLOW_SPEED; // mas lento que lo normal
+    else if (sprinting && stamina > 0.0f)
+        speed = PLAYER_SPRINT_SPEED;
+    else
+        speed = PLAYER_SPEED;
 
     if (isCrouching)
         speed *= PLAYER_CROUCH_MULT;
@@ -153,4 +172,44 @@ void Player::setCrouch(bool crouch)
         return;
 
     isCrouching = crouch;
+}
+
+// --------------------------------------------------
+void Player::updateStamina(float deltaTime, bool wantsSprint, bool isMoving)
+{
+    bool actuallySprinting = wantsSprint && isMoving && stamina > 0.0f && !isExhausted;
+
+    if (actuallySprinting)
+    {
+        stamina -= STAMINA_DRAIN_RATE * deltaTime;
+        staminaRegenTimer = 0.0f;
+
+        if (stamina <= 0.0f)
+        {
+            stamina = 0.0f;
+            isExhausted = true;
+        }
+    }
+    else
+    {
+        staminaRegenTimer += deltaTime;
+
+        if (staminaRegenTimer >= STAMINA_REGEN_DELAY)
+        {
+            stamina += STAMINA_REGEN_RATE * deltaTime;
+
+            if (stamina >= STAMINA_MAX)
+            {
+                stamina = STAMINA_MAX;
+                isExhausted = false;
+            }
+
+            // Si ya recupero algo (ej. al menos 1%), ya no esta "agotado"
+            // para permitir correr de nuevo con lo poco que tiene
+            if (isExhausted && stamina >= STAMINA_MIN_TO_SPRINT)
+                isExhausted = false;
+        }
+    }
+
+    stamina = glm::clamp(stamina, 0.0f, STAMINA_MAX);
 }

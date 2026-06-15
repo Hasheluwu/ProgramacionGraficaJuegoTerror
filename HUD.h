@@ -25,6 +25,10 @@ struct HUDState
 
     bool  showKey3PickedMsg = false;
     float key3PickedMsgTimer = 0.0f;
+
+    float stamina = 100.0f;     // valor actual 0-100
+    float staminaMax = 100.0f;  // valor maximo
+    bool  isExhausted = false;  // para cambiar color cuando esta vacia
 };
 
 
@@ -55,6 +59,10 @@ private:
     static const int FIRST_CHAR = 32;
     static const int NUM_CHARS = 96;
 
+    unsigned int rectShaderProgram = 0;
+    unsigned int rectVAO = 0;
+    unsigned int rectVBO = 0;
+
     struct CharInfo {
         float x0, y0, x1, y1;   // UV en el atlas
         float xoff, yoff;
@@ -73,4 +81,8 @@ private:
     bool BuildShader();
     bool BuildFont(const std::string& path);
     void UpdateProjection();
+
+
+    void DrawRect(float x, float y, float w, float h, glm::vec4 color);
+    bool BuildRectShader();
 };

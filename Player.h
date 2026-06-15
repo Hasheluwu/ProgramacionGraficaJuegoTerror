@@ -18,6 +18,14 @@ const float GRAVITY = 18.0f;
 // Suelo: Plane en Y=0.4, modelo transladado -1.0 en main -> 0.4 - 1.0 = -0.6
 const float FLOOR_Y = -0.6f;
 
+// Estamina
+const float STAMINA_MAX = 100.0f;
+const float STAMINA_DRAIN_RATE = 20.0f;   // por segundo al correr
+const float STAMINA_REGEN_RATE = 25.0f;   // por segundo al no correr
+const float STAMINA_REGEN_DELAY = 2.0f;   // segundos de espera antes de regenerar
+const float PLAYER_SLOW_SPEED = 3.5f;     // velocidad al estar agotado (mas lento que normal)
+const float STAMINA_MIN_TO_SPRINT = 1.0f; // minimo de estamina para poder correr
+
 struct FlashlightData
 {
     bool      on;
@@ -41,6 +49,10 @@ public:
 
     FlashlightData flashlight;
 
+    // Estamina
+    float stamina;        // 0 a STAMINA_MAX
+    bool  isExhausted;    // true cuando llega a 0 y aun no recupera nada
+
     Player(glm::vec3 startPos = glm::vec3(0.0f, 2.0f, 8.0f));
 
     void ProcessInput(GLFWwindow* window, float deltaTime);
@@ -52,7 +64,10 @@ private:
     bool prevTab;
     bool prevFlashlight;
 
+    float staminaRegenTimer; // cuenta el tiempo desde que dejaste de correr
+
     void move(Camera_Movement dir, float deltaTime, bool sprinting);
     void jump();
     void setCrouch(bool crouch);
+    void updateStamina(float deltaTime, bool wantsSprint, bool isMoving);
 };
