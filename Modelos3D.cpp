@@ -709,6 +709,10 @@ int main()
         hudState.key2PickedMsgTimer = key2PickedTimer;
         hudState.showKey3PickedMsg = (key3PickedTimer > 0.0f);
         hudState.key3PickedMsgTimer = key3PickedTimer;
+
+        hudState.stamina = player.stamina;
+        hudState.staminaMax = STAMINA_MAX;
+        hudState.isExhausted = player.isExhausted;
         /*
         // ==================================================
         // DEBUG RAYCAST — imprime 1 vez por segundo
