@@ -1,6 +1,8 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include "AnimatedModel.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -64,18 +66,26 @@ bool pPressedLastFrame = false;
 // ==========================================
 const float OFFSET_X = -76.40f;
 const float OFFSET_Z = -24.00f;
-const float TAMANO_BLOQUE = 0.8f;
+const float TAMANO_BLOQUE = 0.4f;
 const float CENTRO_BLOQUE = TAMANO_BLOQUE / 2.0f;
 const float NIVEL_DEL_SUELO = 2.27f;
 
 // ==================== CONFIGURACIÓN DEL MONSTRUO ====================
-const float MONSTER_HEIGHT = 2.3f;
-const float MONSTER_SPEED = 15.0f;
+const float MONSTER_HEIGHT = -0.5f;
+const float MONSTER_SPEED = 5.0f;
+const float MONSTER_RADIO_ACEPTACION = 1.0f;
+const float MONSTER_DIR_LERP = 1.0f;
+
+const glm::vec3 MONSTER_COLOR = glm::vec3(0.05f, 0.04f, 0.08f);
+
+const int ANIM_IDLE = 0;
+const int ANIM_WALK = 1;
+const int ANIM_RUN = 2;
+const int ANIM_ATTACK = 3;
 // ===================================================================
 
 std::vector<std::vector<int>> laberinto;
 
-// Función para cargar la matriz
 std::vector<std::vector<int>> cargarLaberinto(const std::string& ruta)
 {
     std::vector<std::vector<int>> matriz;
@@ -212,6 +222,20 @@ float GetAspectRatio()
     return (float)currentWindowWidth / (float)currentWindowHeight;
 }
 
+glm::vec3 CeldaAMundo(glm::ivec2 celda, float altura)
+{
+    float px = OFFSET_X + (celda.x * TAMANO_BLOQUE) + CENTRO_BLOQUE;
+    float pz = -(OFFSET_Z + (celda.y * TAMANO_BLOQUE) + CENTRO_BLOQUE);
+    return glm::vec3(px, altura, pz);
+}
+
+glm::ivec2 MundoACelda(glm::vec3 pos)
+{
+    int c = (int)floor((pos.x - OFFSET_X) / TAMANO_BLOQUE);
+    int f = (int)floor((-pos.z - OFFSET_Z) / TAMANO_BLOQUE);
+    return glm::ivec2(c, f);
+}
+
 int main()
 {
     glfwInit();
@@ -283,19 +307,24 @@ int main()
     // CARGAR MATRIZ DE COLISIONES
     // ==========================================================
     std::cout << "[INFO] Cargando matriz de colisiones..." << std::endl;
-    laberinto = cargarLaberinto("C:/Users/hashe/OneDrive/Escritorio/Graficauwu/Resources/Models/Casa/matriz_tremenuwu.txt");
+    laberinto = cargarLaberinto("C:/Users/hashe/OneDrive/Escritorio/Graficauwu/Resources/Models/Casa/matriz_tremenasco.txt");
     if (laberinto.empty())
     {
-        std::cout << "ADVERTENCIA: La matriz de colisiones está vacía o no se pudo cargar. No habrá colisiones." << std::endl;
+        std::cout << "ADVERTENCIA: La matriz de colisiones esta vacia o no se pudo cargar. No habra colisiones." << std::endl;
     }
     else
     {
-        std::cout << "Matriz de colisiones cargada correctamente (" << laberinto.size() << " filas)." << std::endl;
+        std::cout << "Matriz cargada: " << laberinto.size()
+            << " filas x " << laberinto[0].size() << " columnas." << std::endl;
     }
 
-    // ==================== INICIALIZACIÓN DEL MONSTRUO ====================
+    // ==========================================================
+    // INICIALIZACIÓN DEL MONSTRUO
+    // ==========================================================
     Pathfinding iaMonstruo;
     iaMonstruo.temperatura = 0.3f;
+    iaMonstruo.penalizacionPared = 2.5f;
+    iaMonstruo.pesoOctile = 1.05f;
 
     std::vector<glm::ivec2> waypointsMonstruo;
     if (!laberinto.empty()) {
@@ -303,74 +332,113 @@ int main()
             for (int c = 0; c < (int)laberinto[f].size(); ++c)
                 if (laberinto[f][c] == 2)
                     waypointsMonstruo.push_back(glm::ivec2(c, f));
-        std::cout << "[IA] Waypoints encontrados: " << waypointsMonstruo.size() << std::endl;
+        std::cout << "[IA] Celdas waypoint (valor 2) encontradas: " << waypointsMonstruo.size() << std::endl;
     }
 
-    // --- AGRUPAR WAYPOINTS PARA DEJAR SOLO UNO POR GRUPO ---
     std::vector<glm::ivec2> waypointsUnicos;
-    if (!waypointsMonstruo.empty()) {
-        const float DISTANCIA_AGRUPACION = 2.0f; // celdas de distancia máxima para considerar mismo grupo
+    {
+        const float DIST_AGRUPACION = 2.0f;
         std::vector<bool> usado(waypointsMonstruo.size(), false);
         for (size_t i = 0; i < waypointsMonstruo.size(); ++i) {
             if (usado[i]) continue;
-            glm::ivec2 wp = waypointsMonstruo[i];
-            waypointsUnicos.push_back(wp);
-            // Marcar todos los que estén cerca
+            waypointsUnicos.push_back(waypointsMonstruo[i]);
             for (size_t j = i + 1; j < waypointsMonstruo.size(); ++j) {
                 if (usado[j]) continue;
-                float dist = glm::length(glm::vec2(waypointsMonstruo[j] - wp));
-                if (dist < DISTANCIA_AGRUPACION) {
+                float dist = glm::length(glm::vec2(waypointsMonstruo[j] - waypointsMonstruo[i]));
+                if (dist < DIST_AGRUPACION)
                     usado[j] = true;
-                }
             }
         }
-        std::cout << "[IA] Waypoints únicos: " << waypointsUnicos.size() << std::endl;
+        std::cout << "[IA] Waypoints unicos (tras agrupar): " << waypointsUnicos.size() << std::endl;
     }
-    // Ahora usaremos waypointsUnicos en lugar de waypointsMonstruo para los destinos
-    // ================================================================
 
-    // Posición inicial (misma que el jugador)
     glm::vec3 monsterPos(129.0f, MONSTER_HEIGHT, -98.0f);
-    int currentWaypointIndex = 0;
-    std::vector<glm::vec3> rutaSuaveMundo;
-    size_t indiceRutaActual = 0;
+    glm::vec3 oldMonsterPos = monsterPos;
+    glm::vec3 monsterDirActual(1.0f, 0.0f, 0.0f);
 
-    // Verificar que la posición inicial sea válida
+    std::vector<glm::vec3> rutaMundo;
+    size_t indiceRuta = 0;
+    int waypointDestinoIdx = -1;
+
     if (!laberinto.empty()) {
-        int initC = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
-        int initF = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
-        if (initF >= 0 && initF < (int)laberinto.size() && initC >= 0 && initC < (int)laberinto[0].size()) {
-            if (laberinto[initF][initC] == 1) {
-                std::cout << "[ERROR] Posicion inicial del monstruo dentro de una pared!" << std::endl;
-                if (!waypointsUnicos.empty()) {
-                    glm::ivec2 wp = waypointsUnicos[rand() % waypointsUnicos.size()];
-                    monsterPos.x = OFFSET_X + wp.x * TAMANO_BLOQUE + CENTRO_BLOQUE;
-                    monsterPos.z = -(OFFSET_Z + wp.y * TAMANO_BLOQUE + CENTRO_BLOQUE);
-                    std::cout << "[INFO] Monstruo reposicionado en waypoint." << std::endl;
+        glm::ivec2 celdaInicio = MundoACelda(monsterPos);
+        int filas = (int)laberinto.size();
+        int columnas = (int)laberinto[0].size();
+
+        bool fueraOMuro = (celdaInicio.y < 0 || celdaInicio.y >= filas ||
+            celdaInicio.x < 0 || celdaInicio.x >= columnas ||
+            laberinto[celdaInicio.y][celdaInicio.x] == 1);
+
+        if (fueraOMuro && !waypointsUnicos.empty()) {
+            glm::ivec2 wp = waypointsUnicos[rand() % waypointsUnicos.size()];
+            monsterPos = CeldaAMundo(wp, MONSTER_HEIGHT);
+            std::cout << "[IA] Posicion inicial invalida. Monstruo reposicionado en waypoint." << std::endl;
+        }
+    }
+
+    auto PlanificarNuevaRuta = [&]()
+        {
+            if (waypointsUnicos.empty() || laberinto.empty()) return;
+
+            int filas = (int)laberinto.size();
+            int columnas = (int)laberinto[0].size();
+
+            int nuevoIdx = waypointDestinoIdx;
+            if (waypointsUnicos.size() > 1) {
+                while (nuevoIdx == waypointDestinoIdx)
+                    nuevoIdx = rand() % (int)waypointsUnicos.size();
+            }
+            else {
+                nuevoIdx = 0;
+            }
+            waypointDestinoIdx = nuevoIdx;
+            glm::ivec2 destino = waypointsUnicos[waypointDestinoIdx];
+
+            glm::ivec2 celdaInicio = MundoACelda(monsterPos);
+            celdaInicio.x = std::max(0, std::min(celdaInicio.x, columnas - 1));
+            celdaInicio.y = std::max(0, std::min(celdaInicio.y, filas - 1));
+
+            if (laberinto[celdaInicio.y][celdaInicio.x] == 1) {
+                bool encontrado = false;
+                for (int radio = 1; radio <= 5 && !encontrado; ++radio) {
+                    for (int df = -radio; df <= radio && !encontrado; ++df) {
+                        for (int dc = -radio; dc <= radio && !encontrado; ++dc) {
+                            int nf = celdaInicio.y + df;
+                            int nc = celdaInicio.x + dc;
+                            if (nf >= 0 && nf < filas && nc >= 0 && nc < columnas
+                                && laberinto[nf][nc] != 1) {
+                                celdaInicio = glm::ivec2(nc, nf);
+                                encontrado = true;
+                            }
+                        }
+                    }
                 }
             }
-        }
-    }
 
-    if (!waypointsUnicos.empty() && !laberinto.empty()) {
-        glm::ivec2 destino = waypointsUnicos[rand() % waypointsUnicos.size()];
+            std::vector<glm::ivec2> caminoCrudo = iaMonstruo.PlanificarRuta(
+                celdaInicio, destino, laberinto, iaMonstruo.temperatura);
 
-        int startC = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
-        int startF = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
-        startC = std::max(0, std::min(startC, (int)laberinto[0].size() - 1));
-        startF = std::max(0, std::min(startF, (int)laberinto.size() - 1));
+            if (caminoCrudo.empty()) {
+                std::cout << "[IA] Sin camino hacia waypoint " << waypointDestinoIdx
+                    << ". Reintentando en el proximo ciclo." << std::endl;
+                waypointDestinoIdx = -1;
+                return;
+            }
 
-        std::vector<glm::ivec2> cruda = iaMonstruo.PlanificarRuta(glm::ivec2(startC, startF), destino, laberinto, iaMonstruo.temperatura);
-        std::vector<glm::ivec2> suave = iaMonstruo.SuavizarCamino(cruda, laberinto);
+            std::vector<glm::ivec2> caminoSuave = caminoCrudo;
 
-        for (auto& p : suave) {
-            float px = OFFSET_X + (p.x * TAMANO_BLOQUE) + CENTRO_BLOQUE;
-            float pz = -(OFFSET_Z + (p.y * TAMANO_BLOQUE) + CENTRO_BLOQUE);
-            rutaSuaveMundo.push_back(glm::vec3(px, MONSTER_HEIGHT, pz));
-        }
-        indiceRutaActual = 0;
-    }
-    // =====================================================================
+            rutaMundo.clear();
+            for (auto& celda : caminoSuave)
+                rutaMundo.push_back(CeldaAMundo(celda, MONSTER_HEIGHT));
+
+            indiceRuta = 0;
+
+            std::cout << "[IA] Nueva ruta -> waypoint " << waypointDestinoIdx
+                << " | nodos crudo: " << caminoCrudo.size()
+                << " | nodos suave: " << caminoSuave.size() << std::endl;
+        };
+
+    PlanificarNuevaRuta();
 
     // ==========================================================
     // SHADERS
@@ -378,6 +446,7 @@ int main()
     Shader shader("shaders/vertex.glsl", "shaders/fragment.glsl");
     Shader lampShader("shaders/lamp.vert", "shaders/lamp.frag");
     Shader depthShader("shaders/shadow_depth.vert", "shaders/shadow_depth.frag");
+    Shader monsterShader("shaders/anim_vertex.glsl", "shaders/lamp.frag");
 
     // ==========================================================
     // MENU
@@ -397,11 +466,11 @@ int main()
     menu.state = MenuState::LOADING;
 
     Model* model = nullptr;
-    Model* monsterModel = nullptr;
+    AnimatedModel monsterModel;
 
     float fakeProgress = 0.0f;
     float loadLastFrame = (float)glfwGetTime();
-    bool modelLoaded = false;
+    bool  modelLoaded = false;
 
     while (!glfwWindowShouldClose(window) && !modelLoaded)
     {
@@ -432,7 +501,47 @@ int main()
         if (fakeProgress >= 0.9f)
         {
             model = new Model("Resources/Models/Casa/sotano2.obj");
-            monsterModel = new Model("Resources/Models/Casa/sphere/scene.gltf");
+
+            std::string carpeta = "Resources/Models/Monstruo/";
+            monsterModel.LoadModel(carpeta + "Ch30_nonPBR.fbx");
+            monsterModel.LoadAnimation(carpeta + "Idle.fbx", "idle");
+            monsterModel.LoadAnimation(carpeta + "Sad Walk.fbx", "walk");
+            monsterModel.LoadAnimation(carpeta + "Fast Run.fbx", "run");
+            monsterModel.LoadAnimation(carpeta + "Surprise Uppercut.fbx", "attack");
+            monsterModel.SetAnimation("idle");
+
+            monsterModel.PrintHierarchy();
+
+
+
+            std::cout << "Animaciones cargadas: " << monsterModel.AnimCount() << std::endl;
+
+            std::cout << "--- PRIMEROS 10 NODOS DE LA JERARQUÍA ---" << std::endl;
+            const auto& hierarchy = monsterModel.GetBoneHierarchy();
+            for (size_t i = 0; i < hierarchy.size() && i < 10; ++i) {
+                std::cout << hierarchy[i].name << std::endl;
+            }
+            std::cout << "------------------------------------------" << std::endl;
+
+            // --- DEPURACIÓN DE NOMBRES DE HUESOS ---
+            {
+                std::cout << "\n--- HUESOS EN EL MODELO BASE ---" << std::endl;
+                const auto& boneMap = monsterModel.GetBoneMap();
+                for (const auto& kv : boneMap)
+                    std::cout << kv.first << std::endl;
+
+                std::cout << "\n--- CANALES DE ANIMACIÓN 'walk' ---" << std::endl;
+                const auto& anims = monsterModel.GetAnimations();
+                for (const auto& anim : anims) {
+                    if (anim.name == "walk") {
+                        for (const auto& ch : anim.channels)
+                            std::cout << ch.boneName << std::endl;
+                        break;
+                    }
+                }
+                std::cout << "----------------------------------\n" << std::endl;
+            }
+            // -----------------------------------------
 
             modelLoaded = true;
 
@@ -493,7 +602,6 @@ int main()
     if (glfwWindowShouldClose(window))
     {
         delete model;
-        delete monsterModel;
         audio.Shutdown();
         glfwTerminate();
         return 0;
@@ -528,50 +636,35 @@ int main()
         "Resources/Models/Casa/puerta_1.obj",
         glm::vec3(29.264f, 0.0f, 3.9708f),
         glm::vec3(28.2658f, 1.6f, 2.04128f),
-        0.0f,
-        90.0f,
-        120.0f,
-        4.0f
+        0.0f, 90.0f, 120.0f, 4.0f
     ));
 
     doors.push_back(std::make_unique<Door>(
         "Resources/Models/Casa/puerta_2.obj",
         glm::vec3(-18.673f, 0.0f, 3.9345f),
         glm::vec3(-18.673f, 1.6f, 3.9345f),
-        0.0f,
-        90.0f,
-        120.0f,
-        6.0f
+        0.0f, 90.0f, 120.0f, 6.0f
     ));
 
     doors.push_back(std::make_unique<Door>(
         "Resources/Models/Casa/puerta_3.obj",
         glm::vec3(-46.39f, 0.0f, -89.064f),
         glm::vec3(-46.39f, 1.6f, -89.064f),
-        0.0f,
-        -90.0f,
-        120.0f,
-        6.0f
+        0.0f, -90.0f, 120.0f, 6.0f
     ));
 
     doors.push_back(std::make_unique<Door>(
         "Resources/Models/Casa/puerta_4.obj",
         glm::vec3(33.317f, 0.0f, -84.054f),
         glm::vec3(33.317f, 1.6f, -84.054f),
-        0.0f,
-        90.0f,
-        120.0f,
-        6.0f
+        0.0f, 90.0f, 120.0f, 6.0f
     ));
 
     doors.push_back(std::make_unique<Door>(
         "Resources/Models/Casa/puerta_5.obj",
         glm::vec3(53.266f, 0.0f, -107.91f),
         glm::vec3(53.266f, 1.6f, -107.91f),
-        0.0f,
-        90.0f,
-        120.0f,
-        6.0f
+        0.0f, 90.0f, 120.0f, 6.0f
     ));
 
     // ==========================================================
@@ -589,17 +682,8 @@ int main()
 
     glGenTextures(1, &flashDepthMap);
     glBindTexture(GL_TEXTURE_2D, flashDepthMap);
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_DEPTH_COMPONENT,
-        SHADOW_WIDTH,
-        SHADOW_HEIGHT,
-        0,
-        GL_DEPTH_COMPONENT,
-        GL_FLOAT,
-        NULL
-    );
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+        SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -618,17 +702,8 @@ int main()
 
     glGenTextures(1, &lampDepthMap);
     glBindTexture(GL_TEXTURE_2D, lampDepthMap);
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_DEPTH_COMPONENT,
-        SHADOW_WIDTH,
-        SHADOW_HEIGHT,
-        0,
-        GL_DEPTH_COMPONENT,
-        GL_FLOAT,
-        NULL
-    );
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+        SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -672,10 +747,8 @@ int main()
     glGenBuffers(1, &lampVBO);
 
     glBindVertexArray(lampVAO);
-
     glBindBuffer(GL_ARRAY_BUFFER, lampVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
@@ -685,9 +758,10 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         float currentFrame = (float)glfwGetTime();
-
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+
+        if (deltaTime > 0.05f) deltaTime = 0.05f;
 
         CheckFullscreenKey(window);
 
@@ -698,7 +772,7 @@ int main()
         player.UpdateFlashlight();
 
         // ==========================================================
-        // LÓGICA DE COLISIONES (paredes) – jugador
+        // COLISIONES DEL JUGADOR
         // ==========================================================
         if (!laberinto.empty())
         {
@@ -723,101 +797,113 @@ int main()
             }
         }
 
-        // ==================== ACTUALIZACIÓN DEL MONSTRUO ====================
-        // Guardar posición anterior para revertir en caso de colisión
-        glm::vec3 oldMonsterPos = monsterPos;
+        // ==========================================================
+        // ACTUALIZACIÓN DEL MONSTRUO
+        // ==========================================================
+        oldMonsterPos = monsterPos;
 
-        if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size()) {
-            glm::vec3 target = rutaSuaveMundo[indiceRutaActual];
-            glm::vec3 dir = target - monsterPos;
-            float dist = glm::length(dir);
+        if (!laberinto.empty() && !waypointsUnicos.empty())
+        {
+            glm::vec3 dirDeseada = iaMonstruo.CalcularDireccionSteering(
+                monsterPos, rutaMundo, indiceRuta, MONSTER_RADIO_ACEPTACION);
 
-            if (dist > 0.1f) {
-                dir = glm::normalize(dir);
-                monsterPos += dir * MONSTER_SPEED * deltaTime;
-            }
-            else {
-                indiceRutaActual++;
-            }
-        }
-        else if (!waypointsUnicos.empty() && !laberinto.empty()) {
-            int nuevoWP = rand() % waypointsUnicos.size();
-            glm::ivec2 destino = waypointsUnicos[nuevoWP];
+            bool rutaTerminada = (indiceRuta >= rutaMundo.size());
 
-            int startC = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
-            int startF = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
-            startC = std::max(0, std::min(startC, (int)laberinto[0].size() - 1));
-            startF = std::max(0, std::min(startF, (int)laberinto.size() - 1));
+            if (!rutaTerminada && glm::length(dirDeseada) > 0.001f)
+            {
+                monsterDirActual = glm::normalize(
+                    glm::mix(monsterDirActual, dirDeseada, MONSTER_DIR_LERP));
 
-            std::vector<glm::ivec2> cruda = iaMonstruo.PlanificarRuta(glm::ivec2(startC, startF), destino, laberinto, iaMonstruo.temperatura);
-            std::vector<glm::ivec2> suave = iaMonstruo.SuavizarCamino(cruda, laberinto);
+                glm::vec3 nuevaPos = monsterPos + monsterDirActual * MONSTER_SPEED * deltaTime;
+                nuevaPos.y = MONSTER_HEIGHT;
 
-            rutaSuaveMundo.clear();
-            for (auto& p : suave) {
-                float px = OFFSET_X + (p.x * TAMANO_BLOQUE) + CENTRO_BLOQUE;
-                float pz = -(OFFSET_Z + (p.y * TAMANO_BLOQUE) + CENTRO_BLOQUE);
-                rutaSuaveMundo.push_back(glm::vec3(px, MONSTER_HEIGHT, pz));
-            }
-            indiceRutaActual = 0;
-        }
+                bool colision = false;
+                {
+                    float margen = 0.05f;
+                    float bz = -nuevaPos.z;
 
-        // --- Hitbox del monstruo (pequeño y "permisivo" cerca del objetivo) ---
-        if (!laberinto.empty()) {
-            float margenMonster = 0.08f;   // margen mínimo
-            float blenderZ_monster = -monsterPos.z;
+                    int fMin = (int)floor(((bz - margen) - OFFSET_Z) / TAMANO_BLOQUE);
+                    int fMax = (int)floor(((bz + margen) - OFFSET_Z) / TAMANO_BLOQUE);
+                    int cIzq = (int)floor(((nuevaPos.x - margen) - OFFSET_X) / TAMANO_BLOQUE);
+                    int cDer = (int)floor(((nuevaPos.x + margen) - OFFSET_X) / TAMANO_BLOQUE);
 
-            int fMin = (int)floor(((blenderZ_monster - margenMonster) - OFFSET_Z) / TAMANO_BLOQUE);
-            int fMax = (int)floor(((blenderZ_monster + margenMonster) - OFFSET_Z) / TAMANO_BLOQUE);
-            int cIzq = (int)floor(((monsterPos.x - margenMonster) - OFFSET_X) / TAMANO_BLOQUE);
-            int cDer = (int)floor(((monsterPos.x + margenMonster) - OFFSET_X) / TAMANO_BLOQUE);
+                    int filas = (int)laberinto.size();
+                    int columnas = (int)laberinto[0].size();
 
-            bool colisionPared = false;
-            if (fMin < 0 || fMax >= (int)laberinto.size() ||
-                cIzq < 0 || cDer >= (int)laberinto[0].size()) {
-                colisionPared = true;   // fuera del mapa
-            }
-            else if (laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 ||
-                laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1) {
-                colisionPared = true;
-            }
-
-            // Si estamos cerca del punto de ruta actual y ese punto está en celda 0, permitimos ignorar la colisión
-            bool cercaDePuntoRuta = false;
-            if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size()) {
-                float distAlPunto = glm::length(monsterPos - rutaSuaveMundo[indiceRutaActual]);
-                if (distAlPunto < 0.5f) {
-                    // Verificar que la celda del punto sea transitable
-                    glm::vec3 punto = rutaSuaveMundo[indiceRutaActual];
-                    int pC = (int)floor((punto.x - OFFSET_X) / TAMANO_BLOQUE);
-                    int pF = (int)floor((-punto.z - OFFSET_Z) / TAMANO_BLOQUE);
-                    if (pF >= 0 && pF < (int)laberinto.size() && pC >= 0 && pC < (int)laberinto[0].size() &&
-                        laberinto[pF][pC] == 0) {
-                        cercaDePuntoRuta = true;
+                    if (fMin < 0 || fMax >= filas || cIzq < 0 || cDer >= columnas) {
+                        colision = true;
+                    }
+                    else if (laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 ||
+                        laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1) {
+                        colision = true;
                     }
                 }
-            }
 
-            if (colisionPared && !cercaDePuntoRuta) {
-                monsterPos = oldMonsterPos;
-                std::cout << "[MONSTRUO] Hitbox detecto pared. Revertido." << std::endl;
+                if (!colision) {
+                    monsterPos = nuevaPos;
+                }
+                else {
+                    std::cout << "[IA] Colision detectada. Replanificando..." << std::endl;
+                    rutaMundo.clear();
+                    indiceRuta = 0;
+                    PlanificarNuevaRuta();
+                }
+            }
+            else if (rutaTerminada)
+            {
+                std::cout << "[IA] Waypoint " << waypointDestinoIdx
+                    << " alcanzado. Buscando siguiente..." << std::endl;
+                PlanificarNuevaRuta();
             }
         }
 
-        // Debug: posición y celda cada segundo
-        static float debugTimer = 0.0f;
-        debugTimer += deltaTime;
-        if (debugTimer >= 1.0f) {
-            debugTimer = 0.0f;
-            int cellX = (int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE);
-            int cellZ = (int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE);
-            if (cellZ >= 0 && cellZ < (int)laberinto.size() && cellX >= 0 && cellX < (int)laberinto[0].size()) {
-                std::cout << "[MONSTRUO] Pos: (" << monsterPos.x << ", " << monsterPos.z << ") celda [" << cellZ << "," << cellX << "] = " << laberinto[cellZ][cellX] << std::endl;
-            }
-            else {
-                std::cout << "[MONSTRUO] FUERA DEL MAPA!" << std::endl;
+        // --- Actualizar animación del monstruo (siempre caminando) ---
+        {
+            monsterModel.SetAnimation("walk");
+
+            monsterModel.Update(deltaTime);
+            static float debugBoneTimer = 0.0f;
+            debugBoneTimer += deltaTime;
+            if (debugBoneTimer > 2.0f) {
+                static bool printed = false;
+                if (!printed) {
+                    std::cout << "--- MATRICES DE HUESO DESPUÉS DE 2s ---" << std::endl;
+                    for (int i = 0; i < 5; i++) {
+                        const glm::mat4& m = monsterModel.boneMatrices[i];
+                        std::cout << "boneMatrices[" << i << "] = ";
+                        for (int col = 0; col < 4; col++) {
+                            for (int row = 0; row < 4; row++) {
+                                std::cout << m[col][row] << " ";
+                            }
+                        }
+                        std::cout << std::endl;
+                    }
+                    printed = true;
+                }
             }
         }
-        // =====================================================================
+
+        // --- Debug posición monstruo (cada segundo) ---
+        {
+            static float debugTimer = 0.0f;
+            debugTimer += deltaTime;
+            if (debugTimer >= 1.0f) {
+                debugTimer = 0.0f;
+                glm::ivec2 celda = MundoACelda(monsterPos);
+                int filas = (int)laberinto.size();
+                int columnas = (int)(laberinto.empty() ? 0 : laberinto[0].size());
+                if (celda.y >= 0 && celda.y < filas && celda.x >= 0 && celda.x < columnas) {
+                    std::cout << "[MONSTRUO] Pos: (" << monsterPos.x << ", " << monsterPos.z
+                        << ") celda [" << celda.y << "," << celda.x << "] val="
+                        << laberinto[celda.y][celda.x]
+                        << " | ruta idx: " << indiceRuta << "/" << rutaMundo.size()
+                        << std::endl;
+                }
+                else {
+                    std::cout << "[MONSTRUO] FUERA DEL MAPA!" << std::endl;
+                }
+            }
+        }
 
         // ==========================================================
         // DEBUG CON P
@@ -827,7 +913,6 @@ int main()
         if (pPressed && !pPressedLastFrame)
         {
             std::cout << "\n--- Luces cercanas al jugador ---" << std::endl;
-
             std::cout << "Posicion jugador: "
                 << player.camera.Position.x << ", "
                 << player.camera.Position.y << ", "
@@ -836,21 +921,17 @@ int main()
             for (int i = 0; i < NUM_LAMPS; i++)
             {
                 float dist = glm::length(player.camera.Position - lightSystem.lampPositions[i]);
-
                 if (dist < 35.0f)
                 {
                     std::cout << "Luz [" << i << "] distancia: " << dist
                         << " posicion: "
                         << lightSystem.lampPositions[i].x << ", "
                         << lightSystem.lampPositions[i].y << ", "
-                        << lightSystem.lampPositions[i].z
-                        << std::endl;
+                        << lightSystem.lampPositions[i].z << std::endl;
                 }
             }
-
             std::cout << "----------------------------------\n" << std::endl;
         }
-
         pPressedLastFrame = pPressed;
 
         // ==========================================================
@@ -864,34 +945,23 @@ int main()
 
         bool running =
             moving &&
-            (
-                glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-                glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS
-                );
+            (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
 
         if (running)
         {
-            if (audio.IsPlaying("caminata"))
-                audio.Stop("caminata");
-
-            if (!audio.IsPlaying("correr"))
-                audio.Play("correr");
+            if (audio.IsPlaying("caminata")) audio.Stop("caminata");
+            if (!audio.IsPlaying("correr"))  audio.Play("correr");
         }
         else if (moving)
         {
-            if (audio.IsPlaying("correr"))
-                audio.Stop("correr");
-
-            if (!audio.IsPlaying("caminata"))
-                audio.Play("caminata");
+            if (audio.IsPlaying("correr"))    audio.Stop("correr");
+            if (!audio.IsPlaying("caminata")) audio.Play("caminata");
         }
         else
         {
-            if (audio.IsPlaying("caminata"))
-                audio.Stop("caminata");
-
-            if (audio.IsPlaying("correr"))
-                audio.Stop("correr");
+            if (audio.IsPlaying("caminata")) audio.Stop("caminata");
+            if (audio.IsPlaying("correr"))   audio.Stop("correr");
         }
 
         // ==========================================================
@@ -901,15 +971,8 @@ int main()
 
         for (auto& door : doors)
         {
-            door->Update(
-                deltaTime,
-                player.camera.Position,
-                ePressed,
-                ePressedLastFrame,
-                &audio
-            );
+            door->Update(deltaTime, player.camera.Position, ePressed, ePressedLastFrame, &audio);
         }
-
         ePressedLastFrame = ePressed;
 
         // ==========================================================
@@ -946,49 +1009,31 @@ int main()
 
         if (lightSystem.lightsFlickering)
         {
-            if (!audio.IsPlaying("sonido_luces"))
-                audio.Play("sonido_luces");
+            if (!audio.IsPlaying("sonido_luces")) audio.Play("sonido_luces");
         }
         else
         {
-            if (audio.IsPlaying("sonido_luces"))
-                audio.Stop("sonido_luces");
+            if (audio.IsPlaying("sonido_luces")) audio.Stop("sonido_luces");
         }
 
         // ==========================================================
         // MATRICES DE SOMBRA
         // ==========================================================
-        glm::mat4 flashProjection = glm::perspective(
-            glm::radians(55.0f),
-            1.0f,
-            0.05f,
-            50.0f
-        );
-
+        glm::mat4 flashProjection = glm::perspective(glm::radians(55.0f), 1.0f, 0.05f, 50.0f);
         glm::mat4 flashView = glm::lookAt(
             player.flashlight.position,
             player.flashlight.position + player.flashlight.direction,
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
-
+            glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 flashLightSpaceMatrix = flashProjection * flashView;
 
         glm::vec3 shadowLampPos = lightSystem.lampPositions[26];
         glm::vec3 shadowLampDir = glm::vec3(0.0f, -1.0f, 0.0f);
 
-        glm::mat4 lampProjection = glm::perspective(
-            glm::radians(110.0f),
-            1.0f,
-            0.1f,
-            38.0f
-        );
-
+        glm::mat4 lampProjection = glm::perspective(glm::radians(110.0f), 1.0f, 0.1f, 38.0f);
         glm::mat4 lampView = glm::lookAt(
             shadowLampPos,
             shadowLampPos + shadowLampDir,
-            glm::vec3(0.0f, 0.0f, -1.0f)
-        );
-
+            glm::vec3(0.0f, 0.0f, -1.0f));
         glm::mat4 lampLightSpaceMatrix = lampProjection * lampView;
 
         // ==========================================================
@@ -999,27 +1044,13 @@ int main()
         glClear(GL_DEPTH_BUFFER_BIT);
 
         depthShader.use();
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(depthShader.ID, "lightSpaceMatrix"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(flashLightSpaceMatrix)
-        );
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(depthShader.ID, "model"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(modelMat)
-        );
+        glUniformMatrix4fv(glGetUniformLocation(depthShader.ID, "lightSpaceMatrix"),
+            1, GL_FALSE, glm::value_ptr(flashLightSpaceMatrix));
+        glUniformMatrix4fv(glGetUniformLocation(depthShader.ID, "model"),
+            1, GL_FALSE, glm::value_ptr(modelMat));
 
         model->Draw(depthShader.ID);
-
-        for (auto& door : doors)
-        {
-            door->Draw(depthShader.ID, modelMat);
-        }
+        for (auto& door : doors) door->Draw(depthShader.ID, modelMat);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -1031,30 +1062,15 @@ int main()
         glClear(GL_DEPTH_BUFFER_BIT);
 
         depthShader.use();
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(depthShader.ID, "lightSpaceMatrix"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(lampLightSpaceMatrix)
-        );
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(depthShader.ID, "model"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(modelMat)
-        );
+        glUniformMatrix4fv(glGetUniformLocation(depthShader.ID, "lightSpaceMatrix"),
+            1, GL_FALSE, glm::value_ptr(lampLightSpaceMatrix));
+        glUniformMatrix4fv(glGetUniformLocation(depthShader.ID, "model"),
+            1, GL_FALSE, glm::value_ptr(modelMat));
 
         model->Draw(depthShader.ID);
-
-        for (auto& door : doors)
-        {
-            door->Draw(depthShader.ID, modelMat);
-        }
+        for (auto& door : doors) door->Draw(depthShader.ID, modelMat);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
         glViewport(0, 0, currentWindowWidth, currentWindowHeight);
 
         // ==========================================================
@@ -1064,31 +1080,16 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glm::mat4 view = player.camera.GetViewMatrix();
-
         float aspectRatio = GetAspectRatio();
-
         glm::mat4 projection = glm::perspective(
-            glm::radians(player.camera.Zoom),
-            aspectRatio,
-            0.1f,
-            1000.0f
-        );
+            glm::radians(player.camera.Zoom), aspectRatio, 0.1f, 1000.0f);
 
         shader.use();
 
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.ID, "flashLightSpaceMatrix"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(flashLightSpaceMatrix)
-        );
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.ID, "lampLightSpaceMatrix"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(lampLightSpaceMatrix)
-        );
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "flashLightSpaceMatrix"),
+            1, GL_FALSE, glm::value_ptr(flashLightSpaceMatrix));
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "lampLightSpaceMatrix"),
+            1, GL_FALSE, glm::value_ptr(lampLightSpaceMatrix));
 
         glUniform1i(glGetUniformLocation(shader.ID, "lampShadowEnabled"), 1);
 
@@ -1100,24 +1101,15 @@ int main()
         glBindTexture(GL_TEXTURE_2D, lampDepthMap);
         glUniform1i(glGetUniformLocation(shader.ID, "lampShadowMap"), 11);
 
-        glUniform1i(
-            glGetUniformLocation(shader.ID, "flashlightOn"),
-            player.flashlight.on
-        );
-
-        glUniform3f(
-            glGetUniformLocation(shader.ID, "flashlightPos"),
+        glUniform1i(glGetUniformLocation(shader.ID, "flashlightOn"), player.flashlight.on);
+        glUniform3f(glGetUniformLocation(shader.ID, "flashlightPos"),
             player.flashlight.position.x,
             player.flashlight.position.y,
-            player.flashlight.position.z
-        );
-
-        glUniform3f(
-            glGetUniformLocation(shader.ID, "flashlightDir"),
+            player.flashlight.position.z);
+        glUniform3f(glGetUniformLocation(shader.ID, "flashlightDir"),
             player.flashlight.direction.x,
             player.flashlight.direction.y,
-            player.flashlight.direction.z
-        );
+            player.flashlight.direction.z);
 
         for (int i = 0; i < NUM_LAMPS; i++)
         {
@@ -1152,141 +1144,92 @@ int main()
                 range = 28.0f;
             }
 
-            glUniform3f(
-                glGetUniformLocation(shader.ID, (base + ".position").c_str()),
+            glUniform3f(glGetUniformLocation(shader.ID, (base + ".position").c_str()),
                 lightSystem.lampPositions[i].x,
                 lightSystem.lampPositions[i].y,
-                lightSystem.lampPositions[i].z
-            );
-
-            glUniform3f(
-                glGetUniformLocation(shader.ID, (base + ".color").c_str()),
-                1.0f,
-                0.95f,
-                0.8f
-            );
-
-            glUniform1f(
-                glGetUniformLocation(shader.ID, (base + ".intensity").c_str()),
-                lampPower
-            );
-
-            glUniform1f(
-                glGetUniformLocation(shader.ID, (base + ".constant").c_str()),
-                1.0f
-            );
-
-            glUniform1f(
-                glGetUniformLocation(shader.ID, (base + ".linear").c_str()),
-                linear
-            );
-
-            glUniform1f(
-                glGetUniformLocation(shader.ID, (base + ".quadratic").c_str()),
-                quadratic
-            );
-
-            glUniform1f(
-                glGetUniformLocation(shader.ID, (base + ".range").c_str()),
-                range
-            );
+                lightSystem.lampPositions[i].z);
+            glUniform3f(glGetUniformLocation(shader.ID, (base + ".color").c_str()),
+                1.0f, 0.95f, 0.8f);
+            glUniform1f(glGetUniformLocation(shader.ID, (base + ".intensity").c_str()), lampPower);
+            glUniform1f(glGetUniformLocation(shader.ID, (base + ".constant").c_str()), 1.0f);
+            glUniform1f(glGetUniformLocation(shader.ID, (base + ".linear").c_str()), linear);
+            glUniform1f(glGetUniformLocation(shader.ID, (base + ".quadratic").c_str()), quadratic);
+            glUniform1f(glGetUniformLocation(shader.ID, (base + ".range").c_str()), range);
         }
 
-        glUniform3f(
-            glGetUniformLocation(shader.ID, "viewPos"),
+        glUniform3f(glGetUniformLocation(shader.ID, "viewPos"),
             player.camera.Position.x,
             player.camera.Position.y,
-            player.camera.Position.z
-        );
+            player.camera.Position.z);
 
-        // Configurar view y projection antes de dibujar geometría
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.ID, "view"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(view)
-        );
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMat));
 
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.ID, "projection"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(projection)
-        );
-
-        // Dibujar modelo del sótano
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader.ID, "model"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(modelMat)
-        );
         model->Draw(shader.ID);
 
-        // Dibujar puertas
-        for (auto& door : doors)
+        for (auto& door : doors) door->Draw(shader.ID, modelMat);
+
+        // ==================== DIBUJAR MONSTRUO (MODELO ANIMADO) ====================
         {
-            door->Draw(shader.ID, modelMat);
+            monsterShader.use();
+
+            glUniformMatrix4fv(glGetUniformLocation(monsterShader.ID, "view"),
+                1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(glGetUniformLocation(monsterShader.ID, "projection"),
+                1, GL_FALSE, glm::value_ptr(projection));
+            glUniformMatrix4fv(glGetUniformLocation(monsterShader.ID, "flashLightSpaceMatrix"),
+                1, GL_FALSE, glm::value_ptr(flashLightSpaceMatrix));
+            glUniformMatrix4fv(glGetUniformLocation(monsterShader.ID, "lampLightSpaceMatrix"),
+                1, GL_FALSE, glm::value_ptr(lampLightSpaceMatrix));
+
+            // Ángulo de orientación en el plano XZ
+            float anguloY = atan2(monsterDirActual.x, monsterDirActual.z) + glm::radians(180.0f);
+
+            glm::mat4 monsterMat = glm::mat4(1.0f);
+
+            // 1. Trasladar a la posición en el mundo
+            monsterMat = glm::translate(monsterMat, monsterPos);
+
+            // 2. Orientar hacia la dirección de movimiento
+            //    Se añade 180° porque muchos modelos de Mixamo miran hacia atrás respecto a atan2
+            monsterMat = glm::rotate(monsterMat, anguloY + glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+            // 3. Escalar (centímetros a metros)
+            monsterMat = glm::scale(monsterMat, glm::vec3(0.02f));
+
+            glUniformMatrix4fv(glGetUniformLocation(monsterShader.ID, "model"),
+                1, GL_FALSE, glm::value_ptr(monsterMat));
+            glUniform3f(glGetUniformLocation(monsterShader.ID, "lampColor"),
+                MONSTER_COLOR.r, MONSTER_COLOR.g, MONSTER_COLOR.b);
+
+            monsterModel.Draw(monsterShader.ID);
         }
-
-        // ==================== DIBUJAR MONSTRUO (esfera brillante, sin sombras) ====================
-        lampShader.use();
-        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-        glm::mat4 monsterMat = glm::mat4(1.0f);
-        monsterMat = glm::translate(monsterMat, monsterPos);
-        monsterMat = glm::scale(monsterMat, glm::vec3(0.12f));
-
-        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(monsterMat));
-        // Color rojo intenso
-        glUniform3f(glGetUniformLocation(lampShader.ID, "lampColor"), 1.0f, 0.2f, 0.2f);
-        monsterModel->Draw(lampShader.ID);
 
         // ==========================================================
         // DIBUJAR CUBOS DE LÁMPARAS
         // ==========================================================
-        lampShader.use();   // Ya está activo, solo aseguramos
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(lampShader.ID, "view"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(view)
-        );
-
-        glUniformMatrix4fv(
-            glGetUniformLocation(lampShader.ID, "projection"),
-            1,
-            GL_FALSE,
-            glm::value_ptr(projection)
-        );
+        lampShader.use();
+        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "view"),
+            1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "projection"),
+            1, GL_FALSE, glm::value_ptr(projection));
 
         glBindVertexArray(lampVAO);
 
         for (int i = 0; i < NUM_LAMPS; i++)
         {
-            if (!lightSystem.lampEnabled[i])
-                continue;
+            if (!lightSystem.lampEnabled[i]) continue;
 
             glm::mat4 lampMat = glm::mat4(1.0f);
             lampMat = glm::translate(lampMat, lightSystem.lampPositions[i]);
 
-            glUniformMatrix4fv(
-                glGetUniformLocation(lampShader.ID, "model"),
-                1,
-                GL_FALSE,
-                glm::value_ptr(lampMat)
-            );
+            glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "model"),
+                1, GL_FALSE, glm::value_ptr(lampMat));
 
             float bright = lightSystem.intensities[i];
-
-            glUniform3f(
-                glGetUniformLocation(lampShader.ID, "lampColor"),
-                1.0f * bright,
-                0.95f * bright,
-                0.8f * bright
-            );
+            glUniform3f(glGetUniformLocation(lampShader.ID, "lampColor"),
+                1.0f * bright, 0.95f * bright, 0.8f * bright);
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
@@ -1295,8 +1238,10 @@ int main()
         glfwPollEvents();
     }
 
+    // ==========================================================
+    // LIMPIEZA
+    // ==========================================================
     delete model;
-    delete monsterModel;
 
     glDeleteVertexArrays(1, &lampVAO);
     glDeleteBuffers(1, &lampVBO);
@@ -1308,7 +1253,6 @@ int main()
     glDeleteTextures(1, &lampDepthMap);
 
     audio.Shutdown();
-
     glfwTerminate();
 
     return 0;

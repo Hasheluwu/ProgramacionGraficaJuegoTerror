@@ -98,6 +98,9 @@
     <ClInclude Include="pathfinding.h">
       <Filter>Archivos de origen</Filter>
     </ClInclude>
+    <ClInclude Include="AnimatedModel.h">
+      <Filter>Archivos de encabezado</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Modelos3D.rc">
@@ -115,5 +118,6 @@
     <None Include="shaders\lamp.frag" />
     <None Include="shaders\lamp.vert" />
     <None Include="shaders\shadow_depth.frag" />
+    <None Include="shaders\anim_vertex.glsl" />
   </ItemGroup>
 </Project>
