@@ -955,7 +955,7 @@ void Menu::renderCredits() {
     }
 
     gap(20.0f);
-    line("PROYECT", 0.75f, 0.65f, 0.0f, 0.0f, true);
+    line("PROJECT", 0.75f, 0.65f, 0.0f, 0.0f, true);
     line("HUNTED", 0.90f, 0.90f, 0.05f, 0.05f, true);
     gap(20.0f);
 
