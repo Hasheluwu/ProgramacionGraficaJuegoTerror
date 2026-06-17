@@ -13,6 +13,7 @@ uniform float time;
 uniform bool flashlightOn;
 uniform vec3 flashlightPos;
 uniform vec3 flashlightDir;
+uniform float brightness;
 
 struct PointLight {
     vec3 position;
@@ -79,6 +80,10 @@ void main()
     float dist      = length(viewPos - FragPos);
     float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
     vec3 finalColor = mix(fogColor, result, fogFactor);
+
+    
+
+FragColor.rgb *= brightness;
 
     FragColor = vec4(finalColor, 1.0);
 }
