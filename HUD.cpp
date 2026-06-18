@@ -286,6 +286,14 @@ void HUD::Render(const HUDState& s)
             glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
     }
 
+    if (s.lookingAtSwitch)
+    {
+        std::string msg = s.switchIsOn ? "[E] Apagar luz" : "[E] Encender luz";
+        float tw = (float)msg.size() * 10.0f;
+        DrawText(msg, cx - tw * 0.5f, cy + 25.0f, 1.0f,
+            glm::vec4(1.0f, 1.0f, 0.5f, 1.0f));
+    }
+
     // Restaurar estado OpenGL
     if (depthTest) glEnable(GL_DEPTH_TEST);
     if (!blend)    glDisable(GL_BLEND);

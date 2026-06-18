@@ -29,6 +29,9 @@ struct HUDState
     float stamina = 100.0f;     // valor actual 0-100
     float staminaMax = 100.0f;  // valor maximo
     bool  isExhausted = false;  // para cambiar color cuando esta vacia
+
+    bool lookingAtSwitch = false;
+    bool switchIsOn = false;
 };
 
 

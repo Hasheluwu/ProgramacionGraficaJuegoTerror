@@ -16,7 +16,7 @@ struct LightEvent
     float duration;
 };
 
-#define NUM_LAMPS 35
+#define NUM_LAMPS 37
 #define NUM_EVENTS 4
 
 class LightSystem

@@ -33,8 +33,6 @@ LightSystem::LightSystem()
     lampPositions[21] = glm::vec3(57.777f, 5.3f, -100.518f);
     lampPositions[22] = glm::vec3(-16.412f, 5.3f, -87.807f);
     lampPositions[23] = glm::vec3(-35.431f, 5.3f, -87.807f);
-    lampPositions[24] = glm::vec3(-70.469f, 5.3f, -87.807f);
-    lampPositions[25] = glm::vec3(-56.126f, 5.3f, -87.807f);
     lampPositions[26] = glm::vec3(-12.805f, 5.3f, -102.474f);
     lampPositions[27] = glm::vec3(42.947f, 5.3f, -108.666f);
     lampPositions[28] = glm::vec3(86.458f, 5.3f, -118.281f);
@@ -44,6 +42,8 @@ LightSystem::LightSystem()
     lampPositions[32] = glm::vec3(102.591f, 5.3f, -97.748f);
     lampPositions[33] = glm::vec3(129.480f, 5.3f, -97.748f);
     lampPositions[34] = glm::vec3(129.480f, 5.3f, -131.970f);
+    lampPositions[35] = glm::vec3(-66.9381f, 5.3f, -87.7766f); 
+    lampPositions[36] = glm::vec3(-58.0631f, 5.3f, -87.5163f); 
 
     for (int i = 0; i < NUM_LAMPS; i++)
     {
@@ -54,6 +54,15 @@ LightSystem::LightSystem()
 
     // Luces activas seleccionadas.
     // Ajustamos esto para que no haya demasiadas lamparas en el techo.
+
+
+    lampEnabled[1] = true;
+
+    lampEnabled[2] = true;
+    lampEnabled[3] = true;
+
+    lampEnabled[9] = true;
+    lampEnabled[10] = true;
 
     // Zonas iniciales / pasillos
     lampEnabled[6] = true;
@@ -73,6 +82,10 @@ LightSystem::LightSystem()
     // Cuarto gigante: solo dos luces bien separadas
     lampEnabled[29] = true;
     lampEnabled[34] = true;
+
+    
+    lampEnabled[35] = true;
+    lampEnabled[36] = true;
 
     eventPool[0] = { STABLE, 7.0f };
     eventPool[1] = { FLICKER, 4.0f };
@@ -185,11 +198,12 @@ void LightSystem::Update(float deltaTime, float currentFrame, glm::vec3 cameraPo
         break;
         }
 
-        intensities[i] = glm::clamp(flicker, 0.0f, 1.0f);
-
         if (!lampEnabled[i])
         {
             intensities[i] = 0.0f;
+            continue;
         }
+
+        intensities[i] = glm::clamp(flicker, 0.0f, 1.0f);
     }
 }
