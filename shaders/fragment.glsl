@@ -36,7 +36,7 @@ struct PointLight {
     float range;
 };
 
-#define NUM_LIGHTS 35
+#define NUM_LIGHTS 37
 uniform PointLight lights[NUM_LIGHTS];
 
 float ShadowCalculation(sampler2D shadowMap, vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
