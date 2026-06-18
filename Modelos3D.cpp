@@ -26,6 +26,8 @@
 #include "Menu.h"
 #include "ItemSystem.h"
 #include "HUD.h"
+#include "Switch.h"
+
 
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
@@ -406,6 +408,72 @@ int main()
         glm::vec3(53.266f, 1.6f, -107.91f),
         0.0f, 90.0f, 120.0f, 6.0f, true));
 
+// ==================================================
+// SWITCHES DE LUZ
+// ==================================================
+    std::vector<std::unique_ptr<LightSwitch>> switches;
+
+    // Switch 1: controla lamparas [26], [35] y [36]
+
+    switches.push_back(std::make_unique<LightSwitch>(
+        "Resources/Models/switch/switch_base.obj",
+        "Resources/Models/switch/switch_rocker.obj",
+        glm::vec3(-46.5f, 2.5f, -85.8093f),
+        std::vector<int>{26, 35, 36},
+        3.0f,
+        0.15f,
+        true,
+        180.0f    // <-- rotacion para esta pared
+    ));
+
+    switches.push_back(std::make_unique<LightSwitch>(
+        "Resources/Models/switch/switch_base.obj",
+        "Resources/Models/switch/switch_rocker.obj",
+        glm::vec3(-6.3f, 2.5f, -111.58f),
+        std::vector<int>{26},
+        3.0f,
+        0.15f,
+        true,
+        -90.0f   // <-- rotacion para esta pared
+    ));
+    
+    //switch cuarto sin puerta1
+    switches.push_back(std::make_unique<LightSwitch>(
+        "Resources/Models/switch/switch_base.obj",
+        "Resources/Models/switch/switch_rocker.obj",
+        glm::vec3(-56.35, 2.5f, -5.0),
+        std::vector<int>{9, 10},
+        3.0f,
+        0.15f,
+        true,
+        0.0f   // <-- rotacion para esta pared
+    ));
+    //switch puerta llave1
+    switches.push_back(std::make_unique<LightSwitch>(
+        "Resources/Models/switch/switch_base.obj",
+        "Resources/Models/switch/switch_rocker.obj",
+        glm::vec3(26.4432, 2.5f, 4.1),
+        std::vector<int>{2, 3},
+        3.0f,
+        0.15f,
+        true,
+        90.0f,
+        180.0f// <-- rotacion para esta pared
+    ));
+
+    //switch puerta llave2
+    switches.push_back(std::make_unique<LightSwitch>(
+        "Resources/Models/switch/switch_base.obj",
+        "Resources/Models/switch/switch_rocker.obj",
+        glm::vec3(-29.0, 2.5f, 23.57),
+        std::vector<int>{1},
+        3.0f,
+        0.15f,
+        true,
+        90.0f   // <-- rotacion para esta pared
+    ));
+
+
     
    /*---------------------------------------------------
             POCICION DE LAS LLAVES
@@ -693,7 +761,16 @@ int main()
                 ePressed, ePressedLastFrame, &audio, keyForThisDoor);
         }
 
+
+        for (auto& sw : switches)
+            sw->Update(deltaTime, player.camera.Position, player.camera.Front,
+                ePressed, ePressedLastFrame, &audio, lightSystem.lampEnabled);
+
         ePressedLastFrame = ePressed;
+
+       
+
+        
 
         // ==================================================
         // ESTADO DEL HUD
@@ -713,6 +790,16 @@ int main()
         hudState.stamina = player.stamina;
         hudState.staminaMax = STAMINA_MAX;
         hudState.isExhausted = player.isExhausted;
+
+
+        for (auto& sw : switches)
+        {
+            if (sw->isBeingLookedAt && !hudState.lookingAtSwitch)
+            {
+                hudState.lookingAtSwitch = true;
+                hudState.switchIsOn = sw->isOn;
+            }
+        }
         /*
         // ==================================================
         // DEBUG RAYCAST — imprime 1 vez por segundo
@@ -925,6 +1012,14 @@ int main()
         for (auto& d : doors)
             d->Draw(shader.ID, modelMat);
 
+        /*-----------------------------------------------
+              DIBUJAS LOS SWITCHES DE LUZ
+        -----------------------------------------------*/
+
+        for (auto& sw : switches)
+            sw->Draw(shader.ID, modelMat);
+
+
         // ==================================================
         // MONSTRUO
         // ==================================================
@@ -940,14 +1035,32 @@ int main()
         // ==================================================
         // LAMPARAS
         // ==================================================
+
+        std::vector<int> lamparasActivas = {
+         1, 2, 3, 6, 8, 9, 10,
+         11, 13, 16, 18, 21, 23, 26,
+         29, 34, 35, 36
+        };
+
         glBindVertexArray(lampVAO);
-        for (int i = 0; i < NUM_LAMPS; i++)
+        for (int i : lamparasActivas)
         {
-            if (!lightSystem.lampEnabled[i]) continue;
             glm::mat4 lm = glm::translate(glm::mat4(1.0f), lightSystem.lampPositions[i]);
             glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(lm));
+
             float br = lightSystem.intensities[i];
-            glUniform3f(glGetUniformLocation(lampShader.ID, "lampColor"), br, 0.95f * br, 0.8f * br);
+
+            if (!lightSystem.lampEnabled[i])
+            {
+                // Apagada por switch — cubo oscuro visible
+                glUniform3f(glGetUniformLocation(lampShader.ID, "lampColor"), 0.05f, 0.05f, 0.05f);
+            }
+            else
+            {
+                // Encendida — cubo brillante
+                glUniform3f(glGetUniformLocation(lampShader.ID, "lampColor"), br, 0.95f * br, 0.8f * br);
+            }
+
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
