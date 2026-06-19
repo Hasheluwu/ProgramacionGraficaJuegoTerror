@@ -1,7 +1,9 @@
 #pragma once
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+
 #include "Camera.h"
 
 const float PLAYER_SPEED = 5.0f;
@@ -18,6 +20,18 @@ const float GRAVITY = 18.0f;
 // Suelo: Plane en Y=0.4, modelo transladado -1.0 en main -> 0.4 - 1.0 = -0.6
 const float FLOOR_Y = -0.6f;
 
+// ===================== ESTAMINA =====================
+const float STAMINA_MAX = 180.0f;              // Antes 100. Ahora dura más.
+const float STAMINA_DRAIN_RATE = 14.0f;        // Antes 20. Ahora se gasta más lento.
+const float STAMINA_REGEN_RATE = 22.0f;        // Recuperación por segundo.
+const float STAMINA_REGEN_DELAY = 1.3f;        // Espera antes de regenerar.
+
+const float PLAYER_SLOW_SPEED = 3.5f;          // Velocidad al estar agotado.
+const float STAMINA_MIN_TO_SPRINT = 45.0f;     // Debe recuperar esto para volver a correr.
+
+const float STAMINA_LOW_PERCENT = 0.30f;       // 30%
+const float SOFT_BREATH_COOLDOWN = 5.0f;       // Tiempo para repetir suspiro suave.
+
 struct FlashlightData
 {
     bool      on;
@@ -28,7 +42,7 @@ struct FlashlightData
 class Player
 {
 public:
-    Camera        camera;
+    Camera camera;
 
     // feetY = posicion real de los pies en el mundo
     // camera.Position.y = feetY + eyeHeight  (se actualiza cada frame)
@@ -37,9 +51,18 @@ public:
     bool  isGrounded;
     bool  isCrouching;
     float verticalVelocity;
-    float eyeHeight;        // altura animada del ojo (lerp)
+    float eyeHeight;
 
     FlashlightData flashlight;
+
+    // Estamina
+    float stamina;
+    bool  isExhausted;
+
+    // Eventos de cansancio.
+    // Estos se activan solo por 1 frame y el main los usa para reproducir sonidos.
+    bool softBreathEvent;
+    bool hardBreathEvent;
 
     Player(glm::vec3 startPos = glm::vec3(0.0f, 2.0f, 8.0f));
 
@@ -47,12 +70,18 @@ public:
     void UpdatePhysics(float deltaTime);
     void UpdateFlashlight();
 
+    float GetStaminaPercent() const;
+
 private:
     bool prevSpace;
     bool prevTab;
     bool prevFlashlight;
 
+    float staminaRegenTimer;
+    float softBreathTimer;
+
     void move(Camera_Movement dir, float deltaTime, bool sprinting);
     void jump();
     void setCrouch(bool crouch);
+    void updateStamina(float deltaTime, bool wantsSprint, bool isMoving);
 };

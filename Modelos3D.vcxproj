@@ -147,6 +147,9 @@
   <ItemGroup>
     <ClCompile Include="AudioManager.cpp" />
     <ClCompile Include="Door.cpp" />
+    <ClCompile Include="HUD.cpp" />
+    <ClCompile Include="ItemSystem.cpp" />
+    <ClCompile Include="LeverPuzzle.cpp" />
     <ClCompile Include="LightSystem.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Mesh.cpp" />
@@ -163,11 +166,16 @@
     <ClInclude Include="AudioManager.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Door.h" />
+    <ClInclude Include="HUD.h" />
+    <ClInclude Include="ItemSystem.h" />
+    <ClInclude Include="LeverPuzzle.h" />
     <ClInclude Include="LightSystem.h" />
     <ClInclude Include="Main.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Model.h" />
+    <ClInclude Include="pathfinding.h" />
     <ClInclude Include="Player.h" />
+    <ClInclude Include="Raycast.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="Skybox.h" />

@@ -134,7 +134,16 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, v
 
 void main()
 {
-    vec3 texSample = texture(texture_diffuse1, TexCoords).rgb;
+    // 1. Extraer el color completo, incluyendo el canal de transparencia (Alpha)
+    vec4 texColor = texture(texture_diffuse1, TexCoords);
+
+    // 2. Si tiene textura y el pixel es casi totalmente transparente, descartarlo
+    if (hasDiffuseTexture && texColor.a < 0.1)
+    {
+        discard;
+    }
+
+    vec3 texSample = texColor.rgb;
     vec3 baseColor = materialColor;
 
     if (hasDiffuseTexture)
