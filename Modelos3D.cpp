@@ -59,6 +59,7 @@ Player       player(glm::vec3(-56.0f, 2.0f, -86.807f));
 AudioManager audio;
 
 bool  ePressedLastFrame = false;
+bool  tPressedLastFrame = false; // <--- Tecla T
 
 float nextTensionSoundTime = 0.0f;
 float nextLaughSoundTime = 0.0f;
@@ -81,8 +82,26 @@ std::vector<std::vector<int>> laberinto;
 // FRUSTUM CULLING
 // ==================================================
 struct Frustum {
-    glm::vec4 planes[6]; // left, right, bottom, top, near, far
+    glm::vec4 planes[6];
 };
+
+struct RoperoData {
+    glm::mat4 modelMatrix;
+    glm::vec3 worldPosition;
+    std::unique_ptr<Door> puertaIzq;
+    std::unique_ptr<Door> puertaDer;
+    std::shared_ptr<bool> openState;
+};
+std::vector<RoperoData> roperosInstanciados;
+Model* roperoCuerpoModel = nullptr;
+
+// ==================================================
+// ESTADO DE OCULTACIÓN
+// ==================================================
+bool        playerHidden = false;
+RoperoData* currentHideRopero = nullptr;
+float       playerHideYaw = 0.0f;
+float       playerHidePitch = 0.0f;
 
 Frustum ExtractFrustum(const glm::mat4& projView) {
     Frustum frustum;
@@ -154,7 +173,6 @@ bool IsAABBInFrustum(const Frustum& frustum, const glm::vec3& min, const glm::ve
     return true;
 }
 
-// Función para calcular AABB local usando los meshes públicos de Model
 void CalculateModelAABB(Model* model, glm::vec3& outMin, glm::vec3& outMax) {
     outMin = glm::vec3(FLT_MAX);
     outMax = glm::vec3(-FLT_MAX);
@@ -175,197 +193,130 @@ void CalculateModelAABB(Model* model, glm::vec3& outMin, glm::vec3& outMax) {
 // ==================================================
 // Helpers
 // ==================================================
-std::vector<std::vector<int>> cargarLaberinto(const std::string& ruta)
-{
+std::vector<std::vector<int>> cargarLaberinto(const std::string& ruta) {
     std::vector<std::vector<int>> matriz;
     std::ifstream archivo(ruta);
-
-    if (!archivo.is_open())
-    {
+    if (!archivo.is_open()) {
         std::cout << "--> ERROR CRITICO: No se encontro el archivo " << ruta << std::endl;
         return matriz;
     }
-
     char c;
     int num;
     std::vector<int> filaActual;
-
-    while (archivo >> c)
-    {
-        if (c == '{')
-        {
-            filaActual.clear();
-        }
-        else if (c == '}')
-        {
-            if (!filaActual.empty())
-                matriz.push_back(filaActual);
-        }
-        else if (isdigit((unsigned char)c))
-        {
+    while (archivo >> c) {
+        if (c == '{') filaActual.clear();
+        else if (c == '}') { if (!filaActual.empty()) matriz.push_back(filaActual); }
+        else if (isdigit((unsigned char)c)) {
             archivo.putback(c);
             archivo >> num;
             filaActual.push_back(num);
         }
-        else if (c == ',')
-        {
-            continue;
-        }
+        else if (c == ',') continue;
     }
-
     return matriz;
 }
 
-float RandomRange(float min, float max)
-{
+float RandomRange(float min, float max) {
     return min + ((float)rand() / (float)RAND_MAX) * (max - min);
 }
 
-glm::vec3 BlenderToOpenGL(float blenderX, float blenderY, float blenderZ)
-{
-    return glm::vec3(
-        blenderX,
-        blenderZ - 1.0f,
-        -blenderY
-    );
+glm::vec3 BlenderToOpenGL(float blenderX, float blenderY, float blenderZ) {
+    return glm::vec3(blenderX, blenderZ - 1.0f, -blenderY);
 }
 
 // ==================================================
 // Callbacks
 // ==================================================
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     currentWindowWidth = width;
     currentWindowHeight = height;
     glViewport(0, 0, width, height);
 }
 
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
-{
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     float xpos = (float)xposIn;
     float ypos = (float)yposIn;
-
-    if (firstMouse)
-    {
+    if (firstMouse) {
         lastX = xpos;
         lastY = ypos;
         firstMouse = false;
     }
-
     player.camera.ProcessMouseMovement(xpos - lastX, lastY - ypos);
-
     lastX = xpos;
     lastY = ypos;
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     player.camera.ProcessMouseScroll((float)yoffset);
 }
 
-void ToggleFullscreen(GLFWwindow* window)
-{
+void ToggleFullscreen(GLFWwindow* window) {
     isFullscreen = !isFullscreen;
-
-    if (isFullscreen)
-    {
+    if (isFullscreen) {
         glfwGetWindowPos(window, &windowedPosX, &windowedPosY);
         glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
-
         GLFWmonitor* monitor = glfwGetPrimaryMonitor();
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-
         currentWindowWidth = mode->width;
         currentWindowHeight = mode->height;
-
         glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
         glViewport(0, 0, mode->width, mode->height);
     }
-    else
-    {
+    else {
         currentWindowWidth = windowedWidth;
         currentWindowHeight = windowedHeight;
-
         glfwSetWindowMonitor(window, NULL, windowedPosX, windowedPosY, windowedWidth, windowedHeight, 0);
         glViewport(0, 0, windowedWidth, windowedHeight);
     }
-
     firstMouse = true;
 }
 
-void CheckFullscreenKey(GLFWwindow* window)
-{
+void CheckFullscreenKey(GLFWwindow* window) {
     bool mPressed = glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS;
-
-    if (mPressed && !mPressedLastFrame)
-        ToggleFullscreen(window);
-
+    if (mPressed && !mPressedLastFrame) ToggleFullscreen(window);
     mPressedLastFrame = mPressed;
 }
 
-float GetAspectRatio()
-{
-    if (currentWindowHeight <= 0)
-        return (float)SCR_WIDTH / (float)SCR_HEIGHT;
-
+float GetAspectRatio() {
+    if (currentWindowHeight <= 0) return (float)SCR_WIDTH / (float)SCR_HEIGHT;
     return (float)currentWindowWidth / (float)currentWindowHeight;
 }
 
-glm::mat4 GetViewWithStaminaEffect(Player& player)
-{
+glm::mat4 GetViewWithStaminaEffect(Player& player) {
     float staminaPercent = player.GetStaminaPercent();
-
     float shakeIntensity = 0.0f;
-
-    if (player.isExhausted)
-        shakeIntensity = 0.045f;
-    else if (staminaPercent <= STAMINA_LOW_PERCENT)
-        shakeIntensity = 0.018f;
-
-    if (shakeIntensity <= 0.0f)
-        return player.camera.GetViewMatrix();
+    if (player.isExhausted) shakeIntensity = 0.045f;
+    else if (staminaPercent <= STAMINA_LOW_PERCENT) shakeIntensity = 0.018f;
+    if (shakeIntensity <= 0.0f) return player.camera.GetViewMatrix();
 
     float time = (float)glfwGetTime();
     float shakeX = sin(time * 35.0f) * shakeIntensity;
     float shakeY = cos(time * 28.0f) * shakeIntensity;
-
     glm::vec3 right = glm::normalize(glm::cross(player.camera.Front, player.camera.Up));
     glm::vec3 shakeOffset = right * shakeX + player.camera.Up * shakeY;
     glm::vec3 visualPos = player.camera.Position + shakeOffset;
-
     return glm::lookAt(visualPos, visualPos + player.camera.Front, player.camera.Up);
 }
 
 // ==================================================
 // MAIN
 // ==================================================
-int main()
-{
+int main() {
     glfwInit();
-
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Hunted", NULL, NULL);
-    if (!window)
-    {
-        glfwTerminate();
-        return -1;
-    }
+    if (!window) { glfwTerminate(); return -1; }
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
-
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        glfwTerminate();
-        return -1;
-    }
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) { glfwTerminate(); return -1; }
 
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
@@ -375,12 +326,8 @@ int main()
     srand((unsigned int)time(NULL));
 
     // AUDIO
-    if (!audio.Init())
-    {
-        std::cout << "ERROR: No se pudo iniciar el sistema de audio." << std::endl;
-    }
-    else
-    {
+    if (!audio.Init()) std::cout << "ERROR: No se pudo iniciar el sistema de audio." << std::endl;
+    else {
         audio.LoadSound("intro", "Resources/Audio/intro.mp3", true);
         audio.LoadSound("caminata", "Resources/Audio/caminata.mp3", true);
         audio.LoadSound("correr", "Resources/Audio/correr.mp3", true);
@@ -418,46 +365,34 @@ int main()
 
     // MATRIZ DE COLISIONES
     laberinto = cargarLaberinto("Resources/Models/Casa/matriz_tremenuwu.txt");
-    if (laberinto.empty())
-        std::cout << "ADVERTENCIA: Matriz vacia." << std::endl;
-    else
-        std::cout << "Matriz cargada (" << laberinto.size() << " filas)." << std::endl;
+    if (laberinto.empty()) std::cout << "ADVERTENCIA: Matriz vacia." << std::endl;
+    else std::cout << "Matriz cargada (" << laberinto.size() << " filas)." << std::endl;
 
-    // MONSTRUO — waypoints
+    // MONSTRUO
     Pathfinding iaMonstruo;
     iaMonstruo.temperatura = 0.3f;
-
     std::vector<glm::ivec2> waypointsMonstruo;
     if (!laberinto.empty())
-    {
         for (int f = 0; f < (int)laberinto.size(); ++f)
             for (int c = 0; c < (int)laberinto[f].size(); ++c)
-                if (laberinto[f][c] == 2)
-                    waypointsMonstruo.push_back(glm::ivec2(c, f));
-    }
+                if (laberinto[f][c] == 2) waypointsMonstruo.push_back(glm::ivec2(c, f));
 
     std::vector<glm::ivec2> waypointsUnicos;
-    if (!waypointsMonstruo.empty())
-    {
+    if (!waypointsMonstruo.empty()) {
         std::vector<bool> usado(waypointsMonstruo.size(), false);
-        for (size_t i = 0; i < waypointsMonstruo.size(); ++i)
-        {
+        for (size_t i = 0; i < waypointsMonstruo.size(); ++i) {
             if (usado[i]) continue;
             waypointsUnicos.push_back(waypointsMonstruo[i]);
             for (size_t j = i + 1; j < waypointsMonstruo.size(); ++j)
-            {
                 if (!usado[j] && glm::length(glm::vec2(waypointsMonstruo[j] - waypointsMonstruo[i])) < 2.0f)
                     usado[j] = true;
-            }
         }
     }
 
     glm::vec3 monsterPos(129.0f, MONSTER_HEIGHT, -98.0f);
     std::vector<glm::vec3> rutaSuaveMundo;
     size_t indiceRutaActual = 0;
-
-    if (!laberinto.empty() && !waypointsUnicos.empty())
-    {
+    if (!laberinto.empty() && !waypointsUnicos.empty()) {
         glm::ivec2 destino = waypointsUnicos[rand() % waypointsUnicos.size()];
         int sC = std::max(0, std::min((int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE), (int)laberinto[0].size() - 1));
         int sF = std::max(0, std::min((int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE), (int)laberinto.size() - 1));
@@ -475,7 +410,6 @@ int main()
     // MENU + carga de modelos
     Menu menu(SCR_WIDTH, SCR_HEIGHT);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-
     if (!audio.IsPlaying("intro")) audio.Play("intro");
 
     menu.state = MenuState::LOADING;
@@ -485,12 +419,10 @@ int main()
     float loadLastFrame = (float)glfwGetTime();
     bool modelLoaded = false;
 
-    while (!glfwWindowShouldClose(window) && !modelLoaded)
-    {
+    while (!glfwWindowShouldClose(window) && !modelLoaded) {
         float now = (float)glfwGetTime();
         float dt = now - loadLastFrame;
         loadLastFrame = now;
-
         CheckFullscreenKey(window);
 
         if (fakeProgress < 0.9f) {
@@ -500,17 +432,16 @@ int main()
 
         menu.SetLoadingProgress(fakeProgress);
         menu.blinkTimer += dt;
-
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         menu.Render();
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        if (fakeProgress >= 0.9f)
-        {
+        if (fakeProgress >= 0.9f) {
             model = new Model("Resources/Models/Casa/sotanoCorregido.obj");
             monsterModel = new Model("Resources/Models/Casa/sphere/scene.gltf");
+            roperoCuerpoModel = new Model("Resources/Models/Casa/cuerpo_ropero.obj");
             modelLoaded = true;
             menu.SetLoadingProgress(1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -520,7 +451,7 @@ int main()
         }
     }
 
-    // Precalcular AABB de los modelos principales
+    // Precalcular AABB
     glm::vec3 houseLocalMin, houseLocalMax;
     CalculateModelAABB(model, houseLocalMin, houseLocalMax);
     glm::vec3 monsterLocalMin, monsterLocalMax;
@@ -529,45 +460,34 @@ int main()
     menu.state = MenuState::MAIN;
     menu.loadingProgress = 0.0f;
     float menuLastFrame = (float)glfwGetTime();
-
-    while (!glfwWindowShouldClose(window) && menu.state != MenuState::PLAYING)
-    {
+    while (!glfwWindowShouldClose(window) && menu.state != MenuState::PLAYING) {
         float now = (float)glfwGetTime();
         float dt = now - menuLastFrame;
         menuLastFrame = now;
-
         CheckFullscreenKey(window);
-
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        if (menu.state == MenuState::SETTINGS)
-            menu.renderSettings(window);
-        else if (menu.state == MenuState::LOADING)
-        {
+        if (menu.state == MenuState::SETTINGS) menu.renderSettings(window);
+        else if (menu.state == MenuState::LOADING) {
             menu.loadingProgress += dt * 0.8f;
             menu.blinkTimer += dt;
             if (menu.loadingProgress >= 1.0f) menu.state = MenuState::PLAYING;
             menu.Render();
         }
-        else
-            menu.Render();
-
+        else menu.Render();
         menu.Update(window, dt);
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    if (glfwWindowShouldClose(window))
-    {
-        delete model; delete monsterModel;
+    if (glfwWindowShouldClose(window)) {
+        delete model; delete monsterModel; delete roperoCuerpoModel;
         audio.Shutdown();
         glfwTerminate();
         return 0;
     }
 
     if (audio.IsPlaying("intro")) audio.Stop("intro");
-
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     firstMouse = true;
     player.camera.MouseSensitivity = menu.mouseSensitivity;
@@ -582,24 +502,12 @@ int main()
 
     // PUERTAS NORMALES
     std::vector<std::unique_ptr<Door>> doors;
+    doors.push_back(std::make_unique<Door>("Resources/Models/Casa/puerta_1.obj", glm::vec3(29.264f, 0.0f, 3.9708f), glm::vec3(28.2658f, 1.6f, 2.04128f), 0.0f, 90.0f, 120.0f, 4.0f, true));
+    doors.push_back(std::make_unique<Door>("Resources/Models/Casa/puerta_2.obj", glm::vec3(-18.673f, 0.0f, 3.9345f), glm::vec3(-18.673f, 1.6f, 3.9345f), 0.0f, 90.0f, 120.0f, 6.0f, true));
+    doors.push_back(std::make_unique<Door>("Resources/Models/Casa/puerta_3.obj", glm::vec3(-46.39f, 0.0f, -89.064f), glm::vec3(-46.39f, 1.6f, -89.064f), 0.0f, -90.0f, 120.0f, 6.0f, false));
+    doors.push_back(std::make_unique<Door>("Resources/Models/Casa/puerta_4.obj", glm::vec3(33.317f, 0.0f, -84.054f), glm::vec3(33.317f, 1.6f, -84.054f), 0.0f, 90.0f, 120.0f, 6.0f, false));
+    doors.push_back(std::make_unique<Door>("Resources/Models/Casa/puerta_5.obj", glm::vec3(53.266f, 0.0f, -107.91f), glm::vec3(53.266f, 1.6f, -107.91f), 0.0f, 90.0f, 120.0f, 6.0f, true));
 
-    doors.push_back(std::make_unique<Door>(
-        "Resources/Models/Casa/puerta_1.obj", glm::vec3(29.264f, 0.0f, 3.9708f),
-        glm::vec3(28.2658f, 1.6f, 2.04128f), 0.0f, 90.0f, 120.0f, 4.0f, true));
-    doors.push_back(std::make_unique<Door>(
-        "Resources/Models/Casa/puerta_2.obj", glm::vec3(-18.673f, 0.0f, 3.9345f),
-        glm::vec3(-18.673f, 1.6f, 3.9345f), 0.0f, 90.0f, 120.0f, 6.0f, true));
-    doors.push_back(std::make_unique<Door>(
-        "Resources/Models/Casa/puerta_3.obj", glm::vec3(-46.39f, 0.0f, -89.064f),
-        glm::vec3(-46.39f, 1.6f, -89.064f), 0.0f, -90.0f, 120.0f, 6.0f, false));
-    doors.push_back(std::make_unique<Door>(
-        "Resources/Models/Casa/puerta_4.obj", glm::vec3(33.317f, 0.0f, -84.054f),
-        glm::vec3(33.317f, 1.6f, -84.054f), 0.0f, 90.0f, 120.0f, 6.0f, false));
-    doors.push_back(std::make_unique<Door>(
-        "Resources/Models/Casa/puerta_5.obj", glm::vec3(53.266f, 0.0f, -107.91f),
-        glm::vec3(53.266f, 1.6f, -107.91f), 0.0f, 90.0f, 120.0f, 6.0f, true));
-
-    // AABB de las puertas normales
     std::vector<glm::vec3> doorAABBMin, doorAABBMax;
     for (auto& d : doors) {
         glm::vec3 pos = d->GetPosition();
@@ -607,42 +515,57 @@ int main()
         doorAABBMax.push_back(pos + glm::vec3(0.75f, 3.5f, 0.15f));
     }
 
-    // ==================================================
-    // PUERTA FINAL (doble hoja) - NUEVO
-    // ==================================================
+    // PUERTA FINAL
     bool puzzleCompleted = false;
-    // Ajusta estas coordenadas con las reales de tu escena
-    glm::vec3 salida_hinge1(-10.0f, 0.0f, -20.0f);
-    glm::vec3 salida_hinge2(-10.0f, 0.0f, -21.0f);
-    glm::vec3 salida_interact(-10.0f, 1.6f, -20.5f);
+    float p1_BlenderX = 143.38f, p1_BlenderY = 118.08f;
+    float p2_BlenderX = 143.40f, p2_BlenderY = 113.87f;
+    glm::vec3 salida_hinge1(p1_BlenderX, 0.0f, -p1_BlenderY);
+    glm::vec3 salida_hinge2(p2_BlenderX, 0.0f, -p2_BlenderY);
+    float medioX = (p1_BlenderX + p2_BlenderX) / 2.0f;
+    float medioY = (p1_BlenderY + p2_BlenderY) / 2.0f;
+    glm::vec3 salida_interact(medioX, 1.6f, -medioY);
+    glm::vec3 interact_oculto(0.0f, -100.0f, 0.0f);
     bool salidaOpenState = false;
 
-    auto puerta_salida1 = std::make_unique<Door>(
-        "Resources/Models/Casa/puerta_salida1.obj",
-        salida_hinge1, salida_interact,
-        0.0f, -90.0f, 120.0f, 4.0f, false, 1.2f,
-        &puzzleCompleted, &salidaOpenState
-    );
-    auto puerta_salida2 = std::make_unique<Door>(
-        "Resources/Models/Casa/puerta_salida2.obj",
-        salida_hinge2, salida_interact,
-        0.0f, 90.0f, 120.0f, 4.0f, false, 1.2f,
-        &puzzleCompleted, &salidaOpenState
-    );
-
+    auto puerta_salida1 = std::make_unique<Door>("Resources/Models/Casa/puerta_salida1.obj", salida_hinge1, salida_interact, 0.0f, -90.0f, 120.0f, 4.0f, false, 2.5f, &puzzleCompleted, &salidaOpenState);
+    auto puerta_salida2 = std::make_unique<Door>("Resources/Models/Casa/puerta_salida2.obj", salida_hinge2, interact_oculto, 0.0f, 90.0f, 120.0f, 4.0f, false, 2.5f, &puzzleCompleted, &salidaOpenState);
     doors.push_back(std::move(puerta_salida1));
     doors.push_back(std::move(puerta_salida2));
-
-    // Añadir sus AABB (mismo tamaño que las otras)
     for (size_t i = doors.size() - 2; i < doors.size(); ++i) {
         glm::vec3 pos = doors[i]->GetPosition();
-        doorAABBMin.push_back(pos - glm::vec3(0.75f, 0.0f, 0.15f));
-        doorAABBMax.push_back(pos + glm::vec3(0.75f, 3.5f, 0.15f));
+        doorAABBMin.push_back(pos - glm::vec3(3.0f, 0.0f, 3.0f));
+        doorAABBMax.push_back(pos + glm::vec3(3.0f, 4.0f, 3.0f));
+    }
+
+    // ==================================================
+    // ROPEROS
+    // ==================================================
+    glm::vec3 r_local_hingeIzq(0.895f, 0.0f, -0.873f);
+    glm::vec3 r_local_hingeDer(-0.8992f, 0.0f, -0.509f);
+    glm::vec3 r_local_interact(0.0f, 1.5f, -0.8f);
+
+    struct PosicionRopero { glm::vec3 pos; float rot; };
+    std::vector<PosicionRopero> ubicacionesRoperos = {
+        { glm::vec3(-18.39f, -0.2f, -5.28f), 0.0f }
+    };
+
+    for (const auto& ubi : ubicacionesRoperos) {
+        RoperoData rd;
+        rd.worldPosition = ubi.pos;
+        rd.modelMatrix = glm::rotate(glm::translate(glm::mat4(1.0f), ubi.pos), glm::radians(ubi.rot), glm::vec3(0, 1, 0));
+        rd.openState = std::make_shared<bool>(false);
+
+        glm::vec3 worldInteract = glm::vec3(rd.modelMatrix * glm::vec4(r_local_interact, 1.0f));
+        glm::vec3 worldHingeIzq = r_local_hingeIzq;
+        glm::vec3 worldHingeDer = r_local_hingeDer;
+
+        rd.puertaIzq = std::make_unique<Door>("Resources/Models/Casa/puerta_ropero_izquierda.obj", worldHingeIzq, worldInteract, 0.0f, -120.0f, 150.0f, 2.0f, false, 2.5f, nullptr, rd.openState.get());
+        rd.puertaDer = std::make_unique<Door>("Resources/Models/Casa/puerta_ropero_derecha.obj", worldHingeDer, glm::vec3(0, -100, 0), 0.0f, 120.0f, 150.0f, 2.0f, false, 2.5f, nullptr, rd.openState.get());
+        roperosInstanciados.push_back(std::move(rd));
     }
 
     // ITEMS Y LLAVES
     ItemSystem itemSystem;
-
     std::vector<glm::vec3> key1PiecePositions;
     key1PiecePositions.push_back(glm::vec3(-2.73801f, 0.35f, -108.702f));
     key1PiecePositions.push_back(glm::vec3(38.8061f, 0.35f, -79.4784f));
@@ -653,10 +576,8 @@ int main()
     const bool DRAW_KEY3_MODEL = true;
     float key2BlenderX = 31.657f, key2BlenderY = -22.245f, key2BlenderZ = 2.227f;
     float key3BlenderX = -18.547f, key3BlenderY = -21.498f, key3BlenderZ = 1.031f;
-
     glm::vec3 key2Position = BlenderToOpenGL(key2BlenderX, key2BlenderY, key2BlenderZ);
     glm::vec3 key3Position = BlenderToOpenGL(key3BlenderX, key3BlenderY, key3BlenderZ);
-
     itemSystem.SpawnKey2At(key2Position, DRAW_KEY2_MODEL);
     itemSystem.SpawnKey3At(key3Position, DRAW_KEY3_MODEL);
 
@@ -674,7 +595,6 @@ int main()
     unsigned int flashDepthMapFBO, lampDepthMapFBO;
     unsigned int flashDepthMap, lampDepthMap;
     float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-
     auto makeShadowMap = [&](unsigned int& fbo, unsigned int& tex) {
         glGenFramebuffers(1, &fbo); glGenTextures(1, &tex);
         glBindTexture(GL_TEXTURE_2D, tex);
@@ -707,7 +627,6 @@ int main()
         -0.5f, 0.05f,-0.2f,  0.5f, 0.05f,-0.2f,  0.5f, 0.05f, 0.2f,
          0.5f, 0.05f, 0.2f, -0.5f, 0.05f, 0.2f, -0.5f, 0.05f,-0.2f,
     };
-
     float markerCubeVertices[] = {
         -0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,
          0.5f,  0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f, -0.5f, -0.5f,
@@ -748,45 +667,62 @@ int main()
 
         CheckFullscreenKey(window);
 
-        // Jugador
-        glm::vec3 oldPos = player.camera.Position;
-        player.ProcessInput(window, deltaTime);
-        player.UpdatePhysics(deltaTime);
-        player.UpdateFlashlight();
+        // --- Capturar tecla T para esconderse ---
+        bool tPressed = glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS;
+        bool tPressedOnce = tPressed && !tPressedLastFrame;
 
-        if (player.softBreathEvent) audio.Play("medio_cansado");
-        if (player.hardBreathEvent) audio.Play("cansado_completo");
+        // --- LÓGICA DE OCULTACIÓN (salir con T) ---
+        if (playerHidden) {
+            if (tPressedOnce && currentHideRopero) {
+                std::cout << "[DEBUG] Saliendo del ropero..." << std::endl;
+                playerHidden = false;
+                *currentHideRopero->openState = true;
 
-        if (!laberinto.empty() && player.camera.Position.y < (NIVEL_DEL_SUELO + 3.0f))
-        {
-            float mg = 0.15f;
-            float bz = -player.camera.Position.z;
-            int fMin = (int)floor(((bz - mg) - OFFSET_Z) / TAMANO_BLOQUE);
-            int fMax = (int)floor(((bz + mg) - OFFSET_Z) / TAMANO_BLOQUE);
-            int cIzq = (int)floor(((player.camera.Position.x - mg) - OFFSET_X) / TAMANO_BLOQUE);
-            int cDer = (int)floor(((player.camera.Position.x + mg) - OFFSET_X) / TAMANO_BLOQUE);
+                glm::vec3 exitPos = currentHideRopero->worldPosition + glm::vec3(0.0f, 1.5f, -1.5f);
+                player.camera.Position = exitPos;
+                player.camera.Yaw = playerHideYaw;
+                player.camera.Pitch = playerHidePitch;
+                player.camera.updateCameraVectors();
 
-            if (fMin < 0 || fMax >= (int)laberinto.size() ||
-                cIzq < 0 || cDer >= (int)laberinto[0].size() ||
-                laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 ||
-                laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1)
-            {
-                player.camera.Position.x = oldPos.x;
-                player.camera.Position.z = oldPos.z;
+                tPressedOnce = false; // Consumir la pulsación para no volver a esconderse inmediatamente
+            }
+        }
+        else {
+            // Movimiento normal del jugador
+            glm::vec3 oldPos = player.camera.Position;
+            player.ProcessInput(window, deltaTime);
+            player.UpdatePhysics(deltaTime);
+            player.UpdateFlashlight();
+
+            if (player.softBreathEvent) audio.Play("medio_cansado");
+            if (player.hardBreathEvent) audio.Play("cansado_completo");
+
+            if (!laberinto.empty() && player.camera.Position.y < (NIVEL_DEL_SUELO + 3.0f)) {
+                float mg = 0.15f;
+                float bz = -player.camera.Position.z;
+                int fMin = (int)floor(((bz - mg) - OFFSET_Z) / TAMANO_BLOQUE);
+                int fMax = (int)floor(((bz + mg) - OFFSET_Z) / TAMANO_BLOQUE);
+                int cIzq = (int)floor(((player.camera.Position.x - mg) - OFFSET_X) / TAMANO_BLOQUE);
+                int cDer = (int)floor(((player.camera.Position.x + mg) - OFFSET_X) / TAMANO_BLOQUE);
+                if (fMin < 0 || fMax >= (int)laberinto.size() ||
+                    cIzq < 0 || cDer >= (int)laberinto[0].size() ||
+                    laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 ||
+                    laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1) {
+                    player.camera.Position.x = oldPos.x;
+                    player.camera.Position.z = oldPos.z;
+                }
             }
         }
 
-        // Monstruo
+        // Monstruo (siempre se actualiza)
         glm::vec3 oldMonsterPos = monsterPos;
-        if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size())
-        {
+        if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size()) {
             glm::vec3 dir = rutaSuaveMundo[indiceRutaActual] - monsterPos;
             float dist = glm::length(dir);
             if (dist > 0.1f) monsterPos += glm::normalize(dir) * MONSTER_SPEED * deltaTime;
             else indiceRutaActual++;
         }
-        else if (!waypointsUnicos.empty() && !laberinto.empty())
-        {
+        else if (!waypointsUnicos.empty() && !laberinto.empty()) {
             glm::ivec2 destino = waypointsUnicos[rand() % waypointsUnicos.size()];
             int sC = std::max(0, std::min((int)floor((monsterPos.x - OFFSET_X) / TAMANO_BLOQUE), (int)laberinto[0].size() - 1));
             int sF = std::max(0, std::min((int)floor((-monsterPos.z - OFFSET_Z) / TAMANO_BLOQUE), (int)laberinto.size() - 1));
@@ -798,8 +734,7 @@ int main()
             indiceRutaActual = 0;
         }
 
-        if (!laberinto.empty())
-        {
+        if (!laberinto.empty()) {
             float mg = 0.08f;
             float bz = -monsterPos.z;
             int fMin = (int)floor(((bz - mg) - OFFSET_Z) / TAMANO_BLOQUE);
@@ -809,9 +744,7 @@ int main()
             bool col = fMin < 0 || fMax >= (int)laberinto.size() || cIzq < 0 || cDer >= (int)laberinto[0].size() ||
                 laberinto[fMin][cIzq] == 1 || laberinto[fMin][cDer] == 1 || laberinto[fMax][cIzq] == 1 || laberinto[fMax][cDer] == 1;
             bool cerca = false;
-            if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size() &&
-                glm::length(monsterPos - rutaSuaveMundo[indiceRutaActual]) < 0.5f)
-            {
+            if (!rutaSuaveMundo.empty() && indiceRutaActual < rutaSuaveMundo.size() && glm::length(monsterPos - rutaSuaveMundo[indiceRutaActual]) < 0.5f) {
                 auto pt = rutaSuaveMundo[indiceRutaActual];
                 int pc = (int)floor((pt.x - OFFSET_X) / TAMANO_BLOQUE);
                 int pf = (int)floor((-pt.z - OFFSET_Z) / TAMANO_BLOQUE);
@@ -821,26 +754,32 @@ int main()
             if (col && !cerca) monsterPos = oldMonsterPos;
         }
 
-        // Audio movimiento
-        bool moving = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
-            glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
-        bool shiftPressed = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
-        bool running = moving && shiftPressed && !player.isExhausted && player.stamina > 0.0f;
+        // Audio movimiento (solo si no está escondido)
+        if (!playerHidden) {
+            bool moving = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+                glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
+            bool shiftPressed = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
+            bool running = moving && shiftPressed && !player.isExhausted && player.stamina > 0.0f;
 
-        if (running) {
-            if (audio.IsPlaying("caminata")) audio.Stop("caminata");
-            if (!audio.IsPlaying("correr")) audio.Play("correr");
-        }
-        else if (moving) {
-            if (audio.IsPlaying("correr")) audio.Stop("correr");
-            if (!audio.IsPlaying("caminata")) audio.Play("caminata");
+            if (running) {
+                if (audio.IsPlaying("caminata")) audio.Stop("caminata");
+                if (!audio.IsPlaying("correr")) audio.Play("correr");
+            }
+            else if (moving) {
+                if (audio.IsPlaying("correr")) audio.Stop("correr");
+                if (!audio.IsPlaying("caminata")) audio.Play("caminata");
+            }
+            else {
+                if (audio.IsPlaying("caminata")) audio.Stop("caminata");
+                if (audio.IsPlaying("correr")) audio.Stop("correr");
+            }
         }
         else {
             if (audio.IsPlaying("caminata")) audio.Stop("caminata");
             if (audio.IsPlaying("correr")) audio.Stop("correr");
         }
 
-        // Interacción
+        // Interacción con E (puertas normales, items, etc.)
         bool ePressed = glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS;
         bool ePressedOnce = ePressed && !ePressedLastFrame;
 
@@ -858,24 +797,65 @@ int main()
         if (key2PickedTimer > 0.0f) key2PickedTimer -= deltaTime;
         if (key3PickedTimer > 0.0f) key3PickedTimer -= deltaTime;
 
-        // Actualizar puzzle
         puzzleCompleted = leverPuzzle.IsComplete();
 
-        // Actualizar puertas
-        for (size_t i = 0; i < doors.size(); ++i)
-        {
+        // Actualizar puertas normales (con E)
+        for (size_t i = 0; i < doors.size(); ++i) {
             bool keyForThisDoor = false;
             if (i == 0) keyForThisDoor = itemSystem.hasKey;
             else if (i == 1) keyForThisDoor = itemSystem.hasKey2;
             else if (i == 4) keyForThisDoor = itemSystem.hasKey3;
-            // Puertas 5 y 6 (puzzle) no necesitan llave, su desbloqueo se controla externamente
             doors[i]->Update(deltaTime, player.camera.Position, player.camera.Front, ePressed, ePressedLastFrame, &audio, keyForThisDoor);
         }
 
-        leverPuzzle.Update(player.camera.Position, ePressedOnce, deltaTime, &audio);
-        ePressedLastFrame = ePressed;
+        // ==================================================
+        // ACCIÓN DE ESCONDERSE EN ROPERO (con T, puerta YA abierta)
+        // ==================================================
+        RoperoData* lookedRopero = nullptr;
+        for (auto& r : roperosInstanciados) {
+            if (r.puertaIzq->isBeingLookedAt || r.puertaDer->isBeingLookedAt) {
+                lookedRopero = &r;
+                break;
+            }
+        }
 
-        // HUD state
+        if (!playerHidden && lookedRopero && *lookedRopero->openState && tPressedOnce) {
+            float dist = glm::distance(
+                glm::vec2(player.camera.Position.x, player.camera.Position.z),
+                glm::vec2(lookedRopero->worldPosition.x, lookedRopero->worldPosition.z)
+            );
+            if (dist < 2.5f) {
+                std::cout << "[DEBUG] Escondiéndose en ropero..." << std::endl;
+                playerHidden = true;
+                currentHideRopero = lookedRopero;
+                *lookedRopero->openState = false;
+
+                playerHideYaw = player.camera.Yaw;
+                playerHidePitch = player.camera.Pitch;
+
+                player.camera.Position = lookedRopero->worldPosition + glm::vec3(0.0f, 1.0f, 0.5f);
+                player.camera.Yaw = 0.0f;
+                player.camera.Pitch = 0.0f;
+                player.camera.updateCameraVectors();
+
+                tPressedOnce = false; // Consumir pulsación
+            }
+        }
+
+        // Actualizar puertas del ropero (con E)
+        for (auto& r : roperosInstanciados) {
+            r.puertaIzq->Update(deltaTime, player.camera.Position, player.camera.Front, ePressed, ePressedLastFrame, &audio, false);
+            r.puertaDer->Update(deltaTime, player.camera.Position, player.camera.Front, ePressed, ePressedLastFrame, &audio, false);
+        }
+
+        leverPuzzle.Update(player.camera.Position, ePressedOnce, deltaTime, &audio);
+
+        ePressedLastFrame = ePressed;
+        tPressedLastFrame = tPressed;
+
+        // ==================================================
+        // HUD STATE
+        // ==================================================
         HUDState hudState{};
         hudState.hasKey = itemSystem.hasKey;
         hudState.hasKey2 = itemSystem.hasKey2;
@@ -890,9 +870,7 @@ int main()
         hudState.staminaMax = STAMINA_MAX;
         hudState.isExhausted = player.isExhausted;
 
-        // Detectar item cercano
-        for (auto& item : itemSystem.items)
-        {
+        for (auto& item : itemSystem.items) {
             if (!item.visible) continue;
             glm::vec2 playerXZ(player.camera.Position.x, player.camera.Position.z);
             glm::vec2 itemXZ(item.position.x, item.position.z);
@@ -902,20 +880,15 @@ int main()
             }
         }
 
-        // Detectar puerta mirada
-        for (size_t i = 0; i < doors.size(); ++i)
-        {
-            if (doors[i]->isBeingLookedAt)
-            {
-                if (i >= 5) // Puertas del puzzle
-                {
+        for (size_t i = 0; i < doors.size(); ++i) {
+            if (doors[i]->isBeingLookedAt) {
+                if (i >= 5) {
                     hudState.lookingAtPuzzleDoor = true;
                     hudState.puzzleDoorBlocked = !puzzleCompleted;
                     hudState.doorIsOpen = doors[i]->IsOpen();
                     hudState.lookingAtDoor = false;
                 }
-                else
-                {
+                else {
                     hudState.lookingAtDoor = true;
                     hudState.doorIsOpen = doors[i]->IsOpen();
                     hudState.doorRequiresKey = false;
@@ -928,6 +901,26 @@ int main()
                 break;
             }
         }
+
+        lookedRopero = nullptr;
+        for (auto& r : roperosInstanciados) {
+            if (r.puertaIzq->isBeingLookedAt || r.puertaDer->isBeingLookedAt) {
+                lookedRopero = &r;
+                break;
+            }
+        }
+        if (lookedRopero) {
+            hudState.lookingAtRopero = true;
+            hudState.roperoOpen = *lookedRopero->openState;
+            if (*lookedRopero->openState && !playerHidden) {
+                float dist = glm::distance(
+                    glm::vec2(player.camera.Position.x, player.camera.Position.z),
+                    glm::vec2(lookedRopero->worldPosition.x, lookedRopero->worldPosition.z)
+                );
+                hudState.canHideInRopero = (dist < 2.5f);
+            }
+        }
+        hudState.playerHiding = playerHidden;
 
         // Eventos de tensión
         if (currentFrame >= nextTensionSoundTime) {
@@ -961,7 +954,7 @@ int main()
             glm::perspective(glm::radians(110.0f), 1.0f, 0.1f, 38.0f) *
             glm::lookAt(slp, slp + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
 
-        // Depth pass linterna
+        // Depth passes
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, flashDepthMapFBO);
         glClear(GL_DEPTH_BUFFER_BIT);
@@ -973,7 +966,6 @@ int main()
         for (auto& d : doors) d->Draw(depthShader.ID, modelMat);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        // Depth pass lámpara 26
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, lampDepthMapFBO);
         glClear(GL_DEPTH_BUFFER_BIT);
@@ -982,6 +974,12 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(depthShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMat));
         model->Draw(depthShader.ID);
         for (auto& d : doors) d->Draw(depthShader.ID, modelMat);
+        for (auto& r : roperosInstanciados) {
+            glUniformMatrix4fv(glGetUniformLocation(depthShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(r.modelMatrix));
+            roperoCuerpoModel->Draw(depthShader.ID);
+            r.puertaIzq->Draw(depthShader.ID, r.modelMatrix);
+            r.puertaDer->Draw(depthShader.ID, r.modelMatrix);
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         // RENDER NORMAL
@@ -995,12 +993,10 @@ int main()
         else if (player.GetStaminaPercent() <= STAMINA_LOW_PERCENT) currentFov = 48.0f;
         glm::mat4 projection = glm::perspective(glm::radians(currentFov), GetAspectRatio(), 0.1f, 1000.0f);
 
-        // Frustum actual
         glm::mat4 projView = projection * view;
         Frustum frustum = ExtractFrustum(projView);
 
         shader.use();
-        // Configurar luces y sombras...
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "flashLightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(flashLightSpaceMatrix));
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "lampLightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lampLightSpaceMatrix));
         glUniform1i(glGetUniformLocation(shader.ID, "lampShadowEnabled"), 1);
@@ -1030,7 +1026,6 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniform3f(glGetUniformLocation(shader.ID, "highlightColor"), 0.0f, 0.0f, 0.0f);
 
-        // Casa (con culling)
         glm::vec3 houseWorldMin = houseLocalMin + glm::vec3(0.0f, -1.0f, 0.0f);
         glm::vec3 houseWorldMax = houseLocalMax + glm::vec3(0.0f, -1.0f, 0.0f);
         if (IsAABBInFrustum(frustum, houseWorldMin, houseWorldMax)) {
@@ -1038,17 +1033,23 @@ int main()
             model->Draw(shader.ID);
         }
 
-        // Puertas (con culling)
         for (size_t i = 0; i < doors.size(); ++i) {
             if (IsAABBInFrustum(frustum, doorAABBMin[i], doorAABBMax[i])) {
                 doors[i]->Draw(shader.ID, modelMat);
             }
         }
 
-        // Palancas (siempre se dibujan)
+        for (auto& r : roperosInstanciados) {
+            if (IsAABBInFrustum(frustum, r.worldPosition - glm::vec3(2.0f), r.worldPosition + glm::vec3(2.0f))) {
+                glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(r.modelMatrix));
+                roperoCuerpoModel->Draw(shader.ID);
+                r.puertaIzq->Draw(shader.ID, r.modelMatrix);
+                r.puertaDer->Draw(shader.ID, r.modelMatrix);
+            }
+        }
+
         leverPuzzle.Draw(shader, modelMat);
 
-        // Monstruo
         lampShader.use();
         glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
@@ -1062,14 +1063,12 @@ int main()
             monsterModel->Draw(lampShader.ID);
         }
 
-        // Lámparas (con culling)
         glBindVertexArray(lampVAO);
         for (int i = 0; i < NUM_LAMPS; i++) {
             if (!lightSystem.lampEnabled[i]) continue;
             glm::vec3 lampMin = lightSystem.lampPositions[i] - glm::vec3(0.5f, 0.05f, 0.2f);
             glm::vec3 lampMax = lightSystem.lampPositions[i] + glm::vec3(0.5f, 0.05f, 0.2f);
             if (!IsAABBInFrustum(frustum, lampMin, lampMax)) continue;
-
             glm::mat4 lm = glm::translate(glm::mat4(1.0f), lightSystem.lampPositions[i]);
             glUniformMatrix4fv(glGetUniformLocation(lampShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(lm));
             float br = lightSystem.intensities[i];
@@ -1077,11 +1076,9 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // Markers y modelos de llaves
         itemSystem.DrawGlowMarkers(lampShader.ID, view, projection, markerVAO);
         itemSystem.Draw(shader.ID, view, projection, markerVAO, modelMat);
 
-        // HUD
         hud.Resize(currentWindowWidth, currentWindowHeight);
         hud.Render(hudState);
 
@@ -1090,13 +1087,12 @@ int main()
     }
 
     // Limpieza
-    delete model; delete monsterModel;
+    delete model; delete monsterModel; delete roperoCuerpoModel;
     glDeleteVertexArrays(1, &lampVAO); glDeleteBuffers(1, &lampVBO);
     glDeleteVertexArrays(1, &markerVAO); glDeleteBuffers(1, &markerVBO);
     glDeleteFramebuffers(1, &flashDepthMapFBO); glDeleteFramebuffers(1, &lampDepthMapFBO);
     glDeleteTextures(1, &flashDepthMap); glDeleteTextures(1, &lampDepthMap);
     audio.Shutdown();
     glfwTerminate();
-
     return 0;
 }

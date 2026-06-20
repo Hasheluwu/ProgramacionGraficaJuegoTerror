@@ -19,6 +19,12 @@ struct HUDState
     bool lookingAtPuzzleDoor = false;
     bool puzzleDoorBlocked = false;
 
+    // ---- ROPERO ----
+    bool lookingAtRopero = false;
+    bool roperoOpen = false;
+    bool canHideInRopero = false;
+    bool playerHiding = false;
+
     bool  showKeyPickedMsg = false;
     float keyPickedMsgTimer = 0.0f;
 

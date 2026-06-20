@@ -130,3 +130,4 @@ bool Door::IsUnlocked()      const {
     if (externalUnlock) return *externalUnlock;
     return !requiresKey;
 }
+

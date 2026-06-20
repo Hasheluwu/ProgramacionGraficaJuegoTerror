@@ -21,16 +21,16 @@ const float GRAVITY = 18.0f;
 const float FLOOR_Y = -0.6f;
 
 // ===================== ESTAMINA =====================
-const float STAMINA_MAX = 180.0f;              // Antes 100. Ahora dura más.
-const float STAMINA_DRAIN_RATE = 14.0f;        // Antes 20. Ahora se gasta más lento.
-const float STAMINA_REGEN_RATE = 22.0f;        // Recuperación por segundo.
-const float STAMINA_REGEN_DELAY = 1.3f;        // Espera antes de regenerar.
+const float STAMINA_MAX = 180.0f;
+const float STAMINA_DRAIN_RATE = 14.0f;
+const float STAMINA_REGEN_RATE = 22.0f;
+const float STAMINA_REGEN_DELAY = 1.3f;
 
-const float PLAYER_SLOW_SPEED = 3.5f;          // Velocidad al estar agotado.
-const float STAMINA_MIN_TO_SPRINT = 45.0f;     // Debe recuperar esto para volver a correr.
+const float PLAYER_SLOW_SPEED = 3.5f;
+const float STAMINA_MIN_TO_SPRINT = 45.0f;
 
-const float STAMINA_LOW_PERCENT = 0.30f;       // 30%
-const float SOFT_BREATH_COOLDOWN = 5.0f;       // Tiempo para repetir suspiro suave.
+const float STAMINA_LOW_PERCENT = 0.30f;
+const float SOFT_BREATH_COOLDOWN = 5.0f;
 
 struct FlashlightData
 {
@@ -45,7 +45,7 @@ public:
     Camera camera;
 
     // feetY = posicion real de los pies en el mundo
-    // camera.Position.y = feetY + eyeHeight  (se actualiza cada frame)
+    // camera.Position.y = feetY + eyeHeight
     float feetY;
 
     bool  isGrounded;
@@ -55,12 +55,17 @@ public:
 
     FlashlightData flashlight;
 
+    // =========================
+    // SISTEMA DE ESCONDERSE
+    // =========================
+    bool isHiding;
+    glm::vec3 hidePosition;
+
     // Estamina
     float stamina;
     bool  isExhausted;
 
-    // Eventos de cansancio.
-    // Estos se activan solo por 1 frame y el main los usa para reproducir sonidos.
+    // Eventos de cansancio
     bool softBreathEvent;
     bool hardBreathEvent;
 
@@ -71,6 +76,8 @@ public:
     void UpdateFlashlight();
 
     float GetStaminaPercent() const;
+    void HideInCloset(const glm::vec3& pos);
+    void ExitCloset();
 
 private:
     bool prevSpace;

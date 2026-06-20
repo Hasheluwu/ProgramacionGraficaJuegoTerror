@@ -20,7 +20,9 @@ Player::Player(glm::vec3 startPos)
     prevTab(false),
     prevFlashlight(false),
     staminaRegenTimer(0.0f),
-    softBreathTimer(0.0f)
+    softBreathTimer(0.0f),
+    isHiding(false),
+    hidePosition(0.0f, 0.0f, 0.0f)
 {
     flashlight.on = false;
     flashlight.position = startPos;
@@ -30,6 +32,13 @@ Player::Player(glm::vec3 startPos)
 // --------------------------------------------------
 void Player::ProcessInput(GLFWwindow* window, float deltaTime)
 {
+    if (isHiding)
+    {
+        camera.Position = hidePosition;
+        feetY = hidePosition.y - eyeHeight;
+        return;
+    }
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -84,6 +93,15 @@ void Player::ProcessInput(GLFWwindow* window, float deltaTime)
 // --------------------------------------------------
 void Player::UpdatePhysics(float deltaTime)
 {
+
+    if (isHiding)
+    {
+        camera.Position = hidePosition;
+        feetY = hidePosition.y - eyeHeight;
+        verticalVelocity = 0.0f;
+        return;
+    }
+
     if (!isGrounded)
         verticalVelocity -= GRAVITY * deltaTime;
 
@@ -263,4 +281,20 @@ void Player::updateStamina(float deltaTime, bool wantsSprint, bool isMoving)
 float Player::GetStaminaPercent() const
 {
     return glm::clamp(stamina / STAMINA_MAX, 0.0f, 1.0f);
+}
+
+void Player::HideInCloset(const glm::vec3& pos)
+{
+    isHiding = true;
+    hidePosition = pos;
+
+    camera.Position = pos;
+    feetY = pos.y - eyeHeight;
+
+    verticalVelocity = 0.0f;
+}
+
+void Player::ExitCloset()
+{
+    isHiding = false;
 }

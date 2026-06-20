@@ -201,7 +201,7 @@ void HUD::Render(const HUDState& s)
         DrawText(msg, cx - tw * 0.5f, cy + 40.0f, 1.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
     }
 
-    // ---- Puerta del puzzle (nuevo) ----
+    // ---- Puerta del puzzle ----
     if (s.lookingAtPuzzleDoor)
     {
         if (s.puzzleDoorBlocked)
@@ -261,6 +261,38 @@ void HUD::Render(const HUDState& s)
         std::string msg = "[E] Cerrar puerta";
         float tw = (float)msg.size() * 10.0f;
         DrawText(msg, cx - tw * 0.5f, cy + 40.0f, 1.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+    }
+
+    // ---- ROPERO (textos corregidos) ----
+    if (s.playerHiding)
+    {
+        std::string msg = "[T] Salir del ropero";
+        float tw = (float)msg.size() * 10.0f;
+        DrawText(msg, cx - tw * 0.5f, cy + 40.0f, 1.0f, glm::vec4(0.7f, 0.7f, 0.9f, 1.0f));
+    }
+    else if (s.lookingAtRopero)
+    {
+        if (!s.roperoOpen)
+        {
+            std::string msg = "[E] Abrir ropero";
+            float tw = (float)msg.size() * 10.0f;
+            DrawText(msg, cx - tw * 0.5f, cy + 40.0f, 1.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+        }
+        else
+        {
+            if (s.canHideInRopero)
+            {
+                std::string msg = "[T] Esconderse";
+                float tw = (float)msg.size() * 10.0f;
+                DrawText(msg, cx - tw * 0.5f, cy + 40.0f, 1.0f, glm::vec4(0.2f, 1.0f, 0.2f, 1.0f));
+            }
+            else
+            {
+                std::string msg = "[E] Cerrar ropero";
+                float tw = (float)msg.size() * 10.0f;
+                DrawText(msg, cx - tw * 0.5f, cy + 40.0f, 1.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+            }
+        }
     }
 
     // Restaurar estado OpenGL

@@ -5,7 +5,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 
-// Movimientos de cámara
 enum Camera_Movement
 {
     FORWARD,
@@ -14,7 +13,6 @@ enum Camera_Movement
     RIGHT
 };
 
-// Valores por defecto
 const float YAW = -90.0f;
 const float PITCH = 0.0f;
 const float SPEED = 8.0f;
@@ -24,18 +22,15 @@ const float ZOOM = 45.0f;
 class Camera
 {
 public:
-    // Atributos principales
     glm::vec3 Position;
     glm::vec3 Front;
     glm::vec3 Up;
     glm::vec3 Right;
     glm::vec3 WorldUp;
 
-    // Ángulos
     float Yaw;
     float Pitch;
 
-    // Opciones
     float MovementSpeed;
     float MouseSensitivity;
     float Zoom;
@@ -66,7 +61,6 @@ public:
         return glm::lookAt(Position, Position + Front, Up);
     }
 
-    // Movimiento con teclado: W, A, S, D
     void ProcessKeyboard(Camera_Movement direction, float deltaTime)
     {
         float velocity = MovementSpeed * deltaTime;
@@ -84,7 +78,6 @@ public:
             Position += GetFlatRight() * velocity;
     }
 
-    // Movimiento del mouse
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true)
     {
         xoffset *= MouseSensitivity;
@@ -105,7 +98,6 @@ public:
         updateCameraVectors();
     }
 
-    // Scroll del mouse
     void ProcessMouseScroll(float yoffset)
     {
         Zoom -= yoffset;
@@ -117,8 +109,6 @@ public:
             Zoom = 45.0f;
     }
 
-    // Dirección frontal plana, sin componente Y
-    // Esto evita que al mirar hacia arriba o abajo la cámara suba o baje.
     glm::vec3 GetFlatFront() const
     {
         glm::vec3 flatFront = glm::vec3(Front.x, 0.0f, Front.z);
@@ -129,7 +119,6 @@ public:
         return glm::normalize(flatFront);
     }
 
-    // Dirección derecha plana, sin componente Y
     glm::vec3 GetFlatRight() const
     {
         glm::vec3 flatRight = glm::vec3(Right.x, 0.0f, Right.z);
@@ -140,7 +129,7 @@ public:
         return glm::normalize(flatRight);
     }
 
-private:
+    // <--- Movido de private a public ---
     void updateCameraVectors()
     {
         glm::vec3 front;
@@ -153,4 +142,7 @@ private:
         Right = glm::normalize(glm::cross(Front, WorldUp));
         Up = glm::normalize(glm::cross(Right, Front));
     }
+
+private:
+    // Ya no hay nada en private, pero puedes dejar otros miembros aquí si los tuvieras.
 };
