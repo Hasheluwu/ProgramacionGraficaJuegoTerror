@@ -5,7 +5,7 @@
 #include <string>
 #include "stb_truetype.h"
 
-enum class MenuState { MAIN, SETTINGS, CREDITS, LOADING, PLAYING };
+enum class MenuState { MAIN, SETTINGS, CREDITS, LOADING, PLAYING, INTRO};
 
 struct TextQuad {
     float x, y, w, h;
