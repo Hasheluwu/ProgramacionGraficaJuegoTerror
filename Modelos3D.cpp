@@ -27,6 +27,7 @@
 #include "ItemSystem.h"
 #include "HUD.h"
 #include "Switch.h"
+#include "Intro.h"
 
 
 const unsigned int SCR_WIDTH = 1280;
@@ -177,6 +178,7 @@ int main()
     if (!window) { glfwTerminate(); return -1; }
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
@@ -361,12 +363,55 @@ int main()
         delete model; delete monsterModel;
         audio.Shutdown(); glfwTerminate(); return 0;
     }
+  // ==================================================
+// INTRO CINEMATICA
+// ==================================================
+Intro intro(SCR_WIDTH, SCR_HEIGHT);
+    intro.Init("Resources/Fonts/times.ttf");
+
+    if (audio.IsPlaying("intro")) audio.Stop("intro");
+
+    std::ifstream testFile("Resources/Audio/ambienteIntro.mp3");
+    std::cout << "[DEBUG] El archivo existe en esa ruta? " << (testFile.good() ? "SI" : "NO") << std::endl;
+    testFile.close();
+    bool okMusica = audio.LoadSound("musica_intro", "Resources/Audio/ambienteIntro.mp3", true);
+    std::cout << "[DEBUG] Carga de musica_intro: " << (okMusica ? "OK" : "FALLO") << std::endl;
+    audio.SetVolume("musica_intro", 0.5f);
+    audio.Play("musica_intro");
+
+    float introLastFrame = (float)glfwGetTime();
+    while (!glfwWindowShouldClose(window) && !intro.finished)
+    {
+        float now = (float)glfwGetTime();
+        float dt = now - introLastFrame;
+        introLastFrame = now;
+
+        CheckFullscreenKey(window);
+
+        // Saltar intro con ESPACIO o ENTER
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS ||
+            glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS)
+            intro.finished = true;
+
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        intro.Update(dt, &audio);
+        intro.Render();
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    audio.Stop("musica_intro");
 
     if (audio.IsPlaying("intro")) audio.Stop("intro");
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     firstMouse = true;
     player.camera.MouseSensitivity = menu.mouseSensitivity;
     lastFrame = (float)glfwGetTime();
+
+
 
     // ==================================================
     // LUCES
