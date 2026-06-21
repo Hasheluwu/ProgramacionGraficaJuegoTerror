@@ -1008,10 +1008,19 @@ int main() {
 
         for (int i = 0; i < NUM_LAMPS; i++) {
             std::string b = "lights[" + std::to_string(i) + "]";
-            float lin = 0.045f, quad = 0.014f, pwr = lightSystem.intensities[i] * 0.75f, range = 13.0f;
+            float lin = 0.08f, quad = 0.03f, pwr = lightSystem.intensities[i] * 0.75f, range = 8.0f;;
             if (i == 2 || i == 3 || i == 4) { lin = 0.09f; quad = 0.032f; pwr = lightSystem.intensities[i] * 0.65f; range = 9.0f; }
             if (i == 29 || i == 34) { lin = 0.018f; quad = 0.0035f; pwr = lightSystem.intensities[i] * 1.5f; range = 24.0f; }
             if (i == 26) { lin = 0.026f; quad = 0.006f; pwr = lightSystem.intensities[i] * 1.25f; range = 28.0f; }
+       
+                if (i == 8)
+                {
+                    pwr = lightSystem.intensities[i] * 1.4f;
+                    range = 10.0f;
+                    lin = 0.03f;
+                    quad = 0.008f;
+                }
+
             glUniform3f(glGetUniformLocation(shader.ID, (b + ".position").c_str()), lightSystem.lampPositions[i].x, lightSystem.lampPositions[i].y, lightSystem.lampPositions[i].z);
             glUniform3f(glGetUniformLocation(shader.ID, (b + ".color").c_str()), 1.0f, 0.95f, 0.8f);
             glUniform1f(glGetUniformLocation(shader.ID, (b + ".intensity").c_str()), pwr);

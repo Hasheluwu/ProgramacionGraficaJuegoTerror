@@ -1,5 +1,5 @@
 #include "LightSystem.h"
-
+#include <iostream>
 #include <glm/glm.hpp>
 #include <cmath>
 #include <cstdlib>
@@ -57,7 +57,7 @@ LightSystem::LightSystem()
 
     // Zonas iniciales / pasillos
     lampEnabled[6] = true;
-    lampEnabled[8] = true;
+    lampEnabled[8] = false;
 
     // Zona central / pasillos internos
     lampEnabled[11] = true;
@@ -191,5 +191,32 @@ void LightSystem::Update(float deltaTime, float currentFrame, glm::vec3 cameraPo
         {
             intensities[i] = 0.0f;
         }
+
     }
+
+    static int lastLamp = -1;
+
+    for (int i = 0; i < NUM_LAMPS; i++)
+    {
+        float dist = glm::length(cameraPos - lampPositions[i]);
+
+        if (dist < 8.0f)
+        {
+            if (lastLamp != i)
+            {
+                lastLamp = i;
+
+                std::cout << "LAMP CERCANA: "
+                    << i
+                    << " -> ("
+                    << lampPositions[i].x << ", "
+                    << lampPositions[i].y << ", "
+                    << lampPositions[i].z << ")"
+                    << std::endl;
+            }
+        }
+    }
+
+
 }
+
