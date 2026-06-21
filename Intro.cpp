@@ -38,14 +38,14 @@ void main() {
 Intro::Intro(int screenWidth, int screenHeight)
     : scrW(screenWidth), scrH(screenHeight)
 {
-    slides.push_back({ "Laboratorio Universitario — Sotano B2\n23:47 horas", 4.0f });
-    slides.push_back({ "Era una noche como cualquier otra para Alex.\nSolo en el laboratorio del sotano,\nterminando su proyecto final.", 5.0f });
-    slides.push_back({ "Su companero aparecio con un cafe.\n\"Te lo mereces despues de tanto trabajo\", dijo.\nAlex bebio sin pensarlo dos veces.", 5.0f });
-    slides.push_back({ "Entonces... todo se apago.", 3.5f });
-    slides.push_back({ "Al despertar, el laboratorio era irreconocible.\nDestruido. Oscuro. En silencio absoluto.\nComo si el tiempo hubiera retrocedido.", 5.5f });
-    slides.push_back({ "Algo se mueve en la oscuridad.\nAlgo que no deberia estar aqui.\nAlgo que ya sabe que estas despierto.", 5.0f });
-    slides.push_back({ "Solo tienes una linterna.\nEncuentra las llaves.\nSal antes de que te encuentre.", 5.0f });
-    slides.push_back({ "No estas solo.", 3.5f });
+    slides.push_back({ "University Laboratory — Basement B2\n11:47 PM", 4.0f });
+    slides.push_back({ "It was a night like any other for Alex.\nAlone in the basement laboratory,\nfinishing his final project.", 5.0f });
+    slides.push_back({ "His partner showed up with a coffee.\n\"You deserve it after all that hard work\", he said.\nAlex drank without thinking twice.", 5.0f });
+    slides.push_back({ "Then... everything went dark.", 3.5f });
+    slides.push_back({ "When he woke up, the lab was unrecognizable.\nDestroyed. Dark. In absolute silence.\nAs if time had been turned back.", 5.5f });
+    slides.push_back({ "Something moves in the darkness.\nSomething that shouldn't be here.\nSomething that already knows you're awake.", 5.0f });
+    slides.push_back({ "You only have a flashlight.\nFind the keys.\nGet out before it finds you.", 5.0f });
+    slides.push_back({ "You are not alone.", 3.5f });
 }
 
 Intro::~Intro()
