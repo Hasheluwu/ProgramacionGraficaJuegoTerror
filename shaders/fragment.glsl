@@ -26,6 +26,8 @@ uniform sampler2D lampShadowMap;
 
 uniform bool lampShadowEnabled;
 
+uniform float brightness;   // <-- NUEVO: control de brillo del menú
+
 struct PointLight {
     vec3 position;
     vec3 color;
@@ -221,6 +223,8 @@ void main()
     float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
 
     vec3 finalColor = mix(fogColor, result, fogFactor);
+
+    finalColor *= brightness;   // <-- NUEVO: aplicar brillo del menú
 
     FragColor = vec4(finalColor, 1.0);
 }

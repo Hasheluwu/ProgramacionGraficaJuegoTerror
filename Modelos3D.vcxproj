@@ -148,6 +148,7 @@
     <ClCompile Include="AudioManager.cpp" />
     <ClCompile Include="Door.cpp" />
     <ClCompile Include="HUD.cpp" />
+    <ClCompile Include="Intro.cpp" />
     <ClCompile Include="ItemSystem.cpp" />
     <ClCompile Include="LeverPuzzle.cpp" />
     <ClCompile Include="LightSystem.cpp" />
@@ -169,6 +170,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Door.h" />
     <ClInclude Include="HUD.h" />
+    <ClInclude Include="Intro.h" />
     <ClInclude Include="ItemSystem.h" />
     <ClInclude Include="LeverPuzzle.h" />
     <ClInclude Include="LightSystem.h" />
