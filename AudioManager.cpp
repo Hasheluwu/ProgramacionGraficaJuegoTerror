@@ -2,7 +2,6 @@
 #include "vendor/miniaudio/miniaudio.h"
 
 #include "AudioManager.h"
-
 #include <iostream>
 
 AudioManager::AudioManager()
@@ -138,4 +137,79 @@ void AudioManager::SetGlobalVolume(float volume)
         return;
 
     ma_engine_set_volume(engine, volume);
+}
+
+// ==================== NUEVOS MÉTODOS 3D (CORREGIDOS) ====================
+
+bool AudioManager::LoadSound3D(const std::string& name, const std::string& path, bool loop)
+{
+    if (!initialized || engine == nullptr)
+        return false;
+
+    ma_sound* sound = new ma_sound();
+
+    ma_result result = ma_sound_init_from_file(
+        engine,
+        path.c_str(),
+        MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_ASYNC,  // necesario para posicionamiento
+        NULL,
+        NULL,
+        sound
+    );
+
+    if (result != MA_SUCCESS)
+    {
+        std::cout << "ERROR: No se pudo cargar el audio 3D: " << path << std::endl;
+        delete sound;
+        return false;
+    }
+
+    ma_sound_set_looping(sound, loop ? MA_TRUE : MA_FALSE);
+
+    // Activar posicionamiento espacial (CORREGIDO: usar enum ma_positioning)
+    ma_sound_set_positioning(sound, ma_positioning_absolute);
+    ma_sound_set_attenuation_model(sound, ma_attenuation_model_inverse);
+    ma_sound_set_rolloff(sound, 1.0f);
+
+    sounds[name] = sound;
+
+    return true;
+}
+
+void AudioManager::Play3D(const std::string& name, const glm::vec3& position, float volume, float minDistance, float maxDistance)
+{
+    auto it = sounds.find(name);
+
+    if (it == sounds.end())
+        return;
+
+    ma_sound* sound = it->second;
+
+    ma_sound_set_position(sound, position.x, position.y, position.z);
+    ma_sound_set_min_distance(sound, minDistance);
+    ma_sound_set_max_distance(sound, maxDistance);
+    ma_sound_set_volume(sound, volume);
+
+    ma_sound_seek_to_pcm_frame(sound, 0);
+    ma_sound_start(sound);
+}
+
+void AudioManager::SetSoundPosition(const std::string& name, const glm::vec3& position)
+{
+    auto it = sounds.find(name);
+
+    if (it == sounds.end())
+        return;
+
+    ma_sound_set_position(it->second, position.x, position.y, position.z);
+}
+
+void AudioManager::SetListenerPosition(const glm::vec3& position, const glm::vec3& forward, const glm::vec3& up)
+{
+    if (!initialized || engine == nullptr)
+        return;
+
+    ma_engine_listener_set_position(engine, 0, position.x, position.y, position.z);
+    ma_engine_listener_set_direction(engine, 0, forward.x, forward.y, forward.z);
+    ma_engine_listener_set_world_up(engine, 0, up.x, up.y, up.z);
 }

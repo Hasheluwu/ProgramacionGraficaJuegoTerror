@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Modelos3D.cpp">
+    <ClCompile Include="Modelos3D3.cpp">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
     <ClCompile Include="vendor\glad\src\glad.c">
@@ -52,6 +52,18 @@
       <Filter>Archivos de origen</Filter>
     </ClCompile>
     <ClCompile Include="stb_impl.cpp">
+      <Filter>Archivos de origen</Filter>
+    </ClCompile>
+    <ClCompile Include="HUD.cpp">
+      <Filter>Archivos de origen</Filter>
+    </ClCompile>
+    <ClCompile Include="ItemSystem.cpp">
+      <Filter>Archivos de origen</Filter>
+    </ClCompile>
+    <ClCompile Include="Switch.cpp">
+      <Filter>Archivos de origen</Filter>
+    </ClCompile>
+    <ClCompile Include="LeverPuzzle.cpp">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
   </ItemGroup>
@@ -101,6 +113,21 @@
     <ClInclude Include="AnimatedModel.h">
       <Filter>Archivos de encabezado</Filter>
     </ClInclude>
+    <ClInclude Include="HUD.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
+    <ClInclude Include="ItemSystem.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
+    <ClInclude Include="Raycast.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
+    <ClInclude Include="Switch.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
+    <ClInclude Include="LeverPuzzle.h">
+      <Filter>Archivos de origen</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Modelos3D.rc">
@@ -119,5 +146,8 @@
     <None Include="shaders\lamp.vert" />
     <None Include="shaders\shadow_depth.frag" />
     <None Include="shaders\anim_vertex.glsl" />
+    <None Include="shaders\monster.frag" />
+    <None Include="shaders\debug_line.frag" />
+    <None Include="shaders\debug_line.vert" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,25 @@
+# Blender 5.1.1 MTL File: 'sotanoCorregido.blend'
+# www.blender.org
+
+newmtl Marco_Puerta
+Ns 319.999939
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ni 1.500000
+illum 2
+map_Kd -o 0 -1 0 Marco_Low_DefaultMaterial_BaseColor.TGA.png
+map_Ke -o 0 -1 0 Marco_Low_DefaultMaterial_Emissive_Blanco..png
+map_d -o 0 -1 0 Marco_Low_DefaultMaterial_BaseColor.TGA.png
+map_Bump -o 0 -1 0 -bm 0.500000 Marco_Low_DefaultMaterial_Normal.TGA.png
+
+newmtl Material.057
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd -s 0.5 0.5 1 metal_0072_color_2k.jpg
+map_Ns -s 0.5 0.5 1 metal_0072_roughness_2k.jpg
+map_refl -s 0.5 0.5 1 metal_0072_metallic_2k.jpg
+map_Bump -s 0.5 0.5 1 -bm 0.300000 metal_0072_normal_opengl_2k.png

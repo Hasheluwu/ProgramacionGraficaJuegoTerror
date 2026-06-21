@@ -4,6 +4,7 @@
 #include <cmath>
 #include <random>
 #include <algorithm>
+#include <climits>
 #include <functional>
 #include <unordered_map>
 #include <glm/glm.hpp>
@@ -60,26 +61,43 @@ public:
         if (!EsTransitable(inicio, mapa, filas, columnas)) return {};
         if (!EsTransitable(objetivo, mapa, filas, columnas)) return {};
 
-        // --- Precalcular mapa de proximidad a paredes (8 direcciones) ---
-        // Cuántos vecinos inmediatos (8-dirs) son pared — más vecinos = más penalización
+
+
+        // Por esto — BFS desde todas las paredes para calcular distancia real:
         vector<vector<float>> costoPared(filas, vector<float>(columnas, 0.0f));
-        const glm::ivec2 dirs8[8] = {
-            {0,1},{0,-1},{1,0},{-1,0},
-            {1,1},{1,-1},{-1,1},{-1,-1}
-        };
-        for (int f = 0; f < filas; ++f) {
-            for (int c = 0; c < columnas; ++c) {
-                if (mapa[f][c] == 1) continue;
-                int vecPared = 0;
-                for (auto& d : dirs8) {
-                    int nf = f + d.y, nc = c + d.x;
-                    if (nf >= 0 && nf < filas && nc >= 0 && nc < columnas && mapa[nf][nc] == 1)
-                        ++vecPared;
+        {
+            vector<vector<int>> distPared(filas, vector<int>(columnas, INT_MAX));
+            queue<glm::ivec2> bfsQ;
+            // Sembrar desde todas las paredes
+            for (int f = 0; f < filas; ++f)
+                for (int c = 0; c < columnas; ++c)
+                    if (mapa[f][c] == 1) { distPared[f][c] = 0; bfsQ.push({ c, f }); }
+            // BFS en 4 direcciones
+            const glm::ivec2 dirs4[4] = { {0,1},{0,-1},{1,0},{-1,0} };
+            while (!bfsQ.empty()) {
+                auto cur = bfsQ.front(); bfsQ.pop();
+                for (auto& d : dirs4) {
+                    int nc = cur.x + d.x, nf = cur.y + d.y;
+                    if (nf >= 0 && nf < filas && nc >= 0 && nc < columnas
+                        && distPared[nf][nc] == INT_MAX) {
+                        distPared[nf][nc] = distPared[cur.y][cur.x] + 1;
+                        bfsQ.push({ nc, nf });
+                    }
                 }
-                // Escala: 1 vecino-pared = penalizacionPared, 8 = 8x
-                costoPared[f][c] = vecPared * penalizacionPared;
             }
+            // Convertir distancia a costo: celdas lejos de paredes = costo bajo
+            for (int f = 0; f < filas; ++f)
+                for (int c = 0; c < columnas; ++c) {
+                    if (mapa[f][c] == 1) continue;
+                    float dist = (float)distPared[f][c];
+                    // Penalización inversa: cerca de pared = caro, lejos = barato
+                    // Satura a distancia 4 para no penalizar el centro infinitamente
+                    float distSat = glm::min(dist, 4.0f);
+                    costoPared[f][c] = penalizacionPared * (1.0f - distSat / 4.0f);
+                }
         }
+
+
 
         // --- Semilla determinista basada en origen + destino + temperatura ---
         // Esto hace que la misma petición produzca el mismo camino (reproducible),

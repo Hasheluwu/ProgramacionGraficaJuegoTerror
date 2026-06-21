@@ -27,6 +27,7 @@ using namespace std;
 #define MAX_BONES         100
 #define MAX_BONES_PER_VERTEX 4
 
+
 // ============================================================
 //  Vertex con datos de skinning
 // ============================================================
@@ -211,7 +212,8 @@ public:
         Assimp::Importer imp;
         const aiScene* scene = imp.ReadFile(path,
             aiProcess_Triangulate | aiProcess_GenNormals |
-            aiProcess_FlipUVs | aiProcess_LimitBoneWeights);
+            aiProcess_FlipUVs | aiProcess_LimitBoneWeights |
+            aiProcess_PopulateArmatureData);
 
         if (!scene || !scene->mRootNode) {
             cout << "[AnimatedModel] Error cargando modelo: " << imp.GetErrorString() << endl;
@@ -250,7 +252,8 @@ public:
     bool LoadAnimation(const string& path, const string& name) {
         Assimp::Importer imp;
         const aiScene* scene = imp.ReadFile(path,
-            aiProcess_Triangulate | aiProcess_LimitBoneWeights);
+            aiProcess_Triangulate | aiProcess_LimitBoneWeights |
+            aiProcess_PopulateArmatureData);
 
         if (!scene) {
             cout << "[AnimatedModel] Error cargando animacion: " << imp.GetErrorString() << endl;
@@ -278,6 +281,7 @@ public:
         cout << "[AnimatedModel] Animacion no encontrada: " << name << endl;
     }
 
+
     void Update(float deltaTime) {
         if (animations.empty()) return;
 
@@ -286,33 +290,66 @@ public:
         double totalTime = anim.duration / ticksPerSec;
         if (totalTime <= 0.0) return;
 
-        const float FRAME_OFFSET = 0.05f;  // salta los primeros 50ms (frame neutro de Mixamo)
+        const float startOffset = 0.05f;
+        // Tiempo de blend al final del ciclo (segundos)
+        const float blendTime = 0.65f;
 
         animTime += deltaTime;
-        if (animTime >= (float)totalTime)
-            animTime = FRAME_OFFSET;
-        if (animTime < FRAME_OFFSET)
-            animTime = FRAME_OFFSET;
+
+        if (animTime >= (float)totalTime) {
+            animTime = startOffset;
+        }
+        if (animTime < startOffset)
+            animTime = startOffset;
 
         double ticks = animTime * ticksPerSec;
 
-        // Ya no llenamos con identidad; calculateBoneTransforms se encarga de actualizar
-        calculateBoneTransforms(anim, ticks, globalInverseTransform, rootNodeIndex);
+        // Si estamos en la zona de blend (ultimos blendTime segundos del ciclo)
+        float timeRemaining = (float)totalTime - animTime;
+        if (timeRemaining < blendTime && loopAnim) {
+            // Calcular factor de blend: 0 = pose actual, 1 = pose inicial
+            float blendFactor = 1.0f - (timeRemaining / blendTime);
 
-        // Depuración: contar matrices no identidad cada 2 segundos
-        static float debugTimer = 0.0f;
-        debugTimer += deltaTime;
-        if (debugTimer >= 2.0f) {
-            debugTimer = 0.0f;
-            int nonIdentity = 0;
+            // Guardar matrices de la pose actual
+            vector<glm::mat4> poseActual = boneMatrices;
+
+            // Calcular matrices de la pose inicial (startOffset)
+            double ticksInicio = startOffset * ticksPerSec;
+            calculateBoneTransforms(anim, ticksInicio, globalInverseTransform, rootNodeIndex);
+            vector<glm::mat4> poseInicio = boneMatrices;
+
+            // Calcular matrices de la pose actual
+            calculateBoneTransforms(anim, ticks, globalInverseTransform, rootNodeIndex);
+
+            // Interpolar entre pose actual y pose inicial
             for (int i = 0; i < (int)boneInfoMap.size(); i++) {
-                if (boneMatrices[i] != glm::mat4(1.0f)) nonIdentity++;
+                // Descomponer y recomponer no es trivial con mat4,
+                // así que mezclamos directamente (aproximación válida para blend suave)
+                boneMatrices[i] = glm::mat4(
+                    glm::mix(boneMatrices[i][0], poseInicio[i][0], blendFactor),
+                    glm::mix(boneMatrices[i][1], poseInicio[i][1], blendFactor),
+                    glm::mix(boneMatrices[i][2], poseInicio[i][2], blendFactor),
+                    glm::mix(boneMatrices[i][3], poseInicio[i][3], blendFactor)
+                );
             }
-            std::cout << "[Anim] Matrices no identidad: " << nonIdentity << " / " << boneInfoMap.size() << std::endl;
+        }
+        else {
+            calculateBoneTransforms(anim, ticks, globalInverseTransform, rootNodeIndex);
         }
     }
 
+
     void Draw(unsigned int shader) {
+
+        // Inicializar TODAS las matrices a identidad antes de enviar
+        for (int i = 0; i < MAX_BONES; i++) {
+            string uni = "boneMatrices[" + to_string(i) + "]";
+            glm::mat4 identity = glm::mat4(1.0f);
+            glUniformMatrix4fv(glGetUniformLocation(shader, uni.c_str()),
+                1, GL_FALSE, glm::value_ptr(identity));
+        }
+
+
         for (int i = 0; i < (int)boneMatrices.size() && i < MAX_BONES; i++) {
             string uni = "boneMatrices[" + to_string(i) + "]";
             glUniformMatrix4fv(glGetUniformLocation(shader, uni.c_str()),
@@ -475,6 +512,9 @@ private:
                 aiNodeAnim* ch = aiAnim->mChannels[c];
                 BoneChannel bc;
                 string rawName = ch->mNodeName.C_Str();
+
+
+
                 size_t pos = rawName.find("_$AssimpFbx$_");
                 if (pos != string::npos)
                     rawName = rawName.substr(0, pos);
@@ -541,6 +581,24 @@ private:
         if (nodeIdx < 0 || nodeIdx >= (int)boneHierarchy.size()) return;
         const BoneNode& node = boneHierarchy[nodeIdx];
 
+        // DEBUG: solo imprime el primer nodo que se procesa (una vez)
+        static bool printed = false;
+        if (!printed) {
+            printed = true;
+            bool found = false;
+            for (auto& ch : anim.channels) {
+                if (ch.boneName == node.name || ch.boneName == "mixamorig:" + node.name) {
+                    cout << "[DEBUG] Nodo raiz: " << node.name
+                        << " | canal encontrado: SI (" << ch.boneName << ")" << endl;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                cout << "[DEBUG] Nodo raiz: " << node.name
+                << " | canal encontrado: NO" << endl;
+        }
+
         glm::mat4 nodeTransform = node.localTransform;
 
         for (auto& ch : anim.channels) {
@@ -552,8 +610,6 @@ private:
                 break;
             }
         }
-
-       
 
         glm::mat4 globalTransform = parentTransform * nodeTransform;
 

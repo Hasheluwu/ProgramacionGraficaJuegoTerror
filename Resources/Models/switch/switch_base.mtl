@@ -1,0 +1,14 @@
+# Blender 5.1.1 MTL File: 'None'
+# www.blender.org
+
+newmtl lightswitch
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Ns lightswitch_Roughness.png
+map_refl lightswitch_Metalness.png
+map_Bump -bm 1.000000 lightswitch_Normal.png
