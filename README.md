@@ -245,7 +245,14 @@ HEIGHT_CROUCH        = 1.3f    // Altura de ojos agachado
 
 ## 👥 Equipo
 
-Proyecto desarrollado como parte del curso de **Programación Gráfica**.
+Proyecto desarrollado como parte del curso de **Programación Gráfica** de la 
+Universidad de Ingeneria Grupo 3t3 con los integrantes:
+
+-Navas Jorge Emilio 
+-Lopez Arguello Hashel Ignacio
+-Garcia Telleria Luis Angel
+-Guido Torrez Maximiliano
+
 
 ---
 
